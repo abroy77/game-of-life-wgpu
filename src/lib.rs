@@ -1,6 +1,6 @@
 pub mod pipeline;
 pub mod vertex;
-use crate::vertex::{INDICES, VERTICES, Vertex};
+use crate::vertex::{Instance, Vertex, INDICES, VERTICES};
 use std::sync::Arc;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::UnwrapThrowExt;
@@ -22,6 +22,7 @@ pub struct State {
     window: Arc<Window>,
     render_pipeline: wgpu::RenderPipeline,
     vertex_buffer: wgpu::Buffer,
+    instance_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
     num_indices: u32,
 }
@@ -196,6 +197,14 @@ impl State {
             usage: wgpu::BufferUsages::INDEX,
         });
 
+        let instances = vertex::get_instances();
+        let instance_buffer = device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("Instance Buffer"),
+                contents: bytemuck::cast_slice(&instances),
+                usage: wgpu::BufferUsages::VERTEX}
+        );
+
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Vertex shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("shader_vert.wgsl").into()),
@@ -225,7 +234,7 @@ impl State {
                 module: &shader,
                 entry_point: Some("vs_main"),
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
-                buffers: &[Vertex::desc()],
+                buffers: &[Vertex::desc(), Instance::desc()],
             },
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList,
@@ -269,6 +278,7 @@ impl State {
             vertex_buffer,
             index_buffer,
             num_indices,
+            instance_buffer
         })
     }
     fn resize(&mut self, width: u32, height: u32) {
@@ -321,6 +331,7 @@ impl State {
             });
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+            render_pass.set_vertex_buffer(1,self.index_buffer.slice(..));
             render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
             render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
         }
