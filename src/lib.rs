@@ -278,7 +278,7 @@ impl State {
             vertex_buffer,
             index_buffer,
             num_indices,
-            instance_buffer
+            instance_buffer,
         })
     }
     fn resize(&mut self, width: u32, height: u32) {
@@ -331,9 +331,9 @@ impl State {
             });
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-            render_pass.set_vertex_buffer(1,self.index_buffer.slice(..));
+            render_pass.set_vertex_buffer(1,self.instance_buffer.slice(..));
             render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-            render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
+            render_pass.draw_indexed(0..self.num_indices, 0, 0..(vertex::ROWS * vertex::COLS) as u32);
         }
         self.queue.submit(std::iter::once(encoder.finish()));
         output.present();
