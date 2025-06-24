@@ -2,8 +2,14 @@
 
 struct Uniforms {
     cell_size: vec2<f32>,
+    gap: f32,
+    rows: u32,
+    cols: u32,
+    _pad: u32
 }
-var<uniform> uniforms: Uniforms;
+
+@group(0) @binding(0)
+var<uniform> uniform: Uniforms;
 
 struct VertexInput {
     @location(0) position: vec2<f32>,

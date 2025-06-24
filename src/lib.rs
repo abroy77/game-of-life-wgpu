@@ -1,6 +1,7 @@
 pub mod pipeline;
 pub mod vertex;
-use crate::vertex::{Instance, Vertex, INDICES, VERTICES};
+pub mod uniforms;
+use crate::{uniforms::Uniforms, vertex::{Instance, Vertex, INDICES, VERTICES}};
 use std::sync::Arc;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::UnwrapThrowExt;
@@ -24,6 +25,7 @@ pub struct State {
     vertex_buffer: wgpu::Buffer,
     instance_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
+    uniform_bind_group: wgpu::BindGroup,
     num_indices: u32,
 }
 
@@ -204,7 +206,27 @@ impl State {
                 contents: bytemuck::cast_slice(&instances),
                 usage: wgpu::BufferUsages::VERTEX}
         );
-
+   
+        let uniform = Uniforms::new();
+        let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Uniform Buffer"),
+            contents: bytemuck::cast_slice(&[uniform]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST
+        });
+        let uniform_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor{
+            label: Some("Uniform Bind Group Layout"),
+            entries: &[wgpu::BindGroupLayoutEntry{
+                binding: 0,
+                visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None },
+                count: None
+            }]
+        });
+        let uniform_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor{
+            label: Some("Uniform Bind Group"),
+            layout: &uniform_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry{binding:0, resource: uniform_buffer.as_entire_binding()}]
+        });
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Vertex shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("shader_vert.wgsl").into()),
@@ -213,7 +235,7 @@ impl State {
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Render Pipeline Layout"),
-                bind_group_layouts: &[],
+                bind_group_layouts: &[&uniform_bind_group_layout],
                 push_constant_ranges: &[],
             });
 
@@ -279,6 +301,7 @@ impl State {
             index_buffer,
             num_indices,
             instance_buffer,
+            uniform_bind_group
         })
     }
     fn resize(&mut self, width: u32, height: u32) {
@@ -330,10 +353,11 @@ impl State {
                 occlusion_query_set: None,
             });
             render_pass.set_pipeline(&self.render_pipeline);
+            render_pass.set_bind_group(0,&self.uniform_bind_group, &[]);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_vertex_buffer(1,self.instance_buffer.slice(..));
             render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-            render_pass.draw_indexed(0..self.num_indices, 0, 0..(vertex::ROWS * vertex::COLS) as u32);
+            render_pass.draw_indexed(0..self.num_indices, 0, 0..(uniforms::ROWS * uniforms::COLS) as u32);
         }
         self.queue.submit(std::iter::once(encoder.finish()));
         output.present();
