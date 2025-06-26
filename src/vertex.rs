@@ -1,4 +1,4 @@
-use crate::uniforms::{ROWS,COLS,GAP,CELL_SIZE};
+use crate::constants::{ROWS, COLS, GAP, CELL_SIZE};
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 
