@@ -18,6 +18,7 @@ struct VertexInput {
 
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
+    @location(0) cell_pos: vec2<f32>,
 };
 
 @vertex
@@ -26,6 +27,7 @@ fn vs_main(
 ) -> VertexOutput {
     var out: VertexOutput;
     out.clip_position = vec4<f32>((model.position * uniform.cell_size) + model.instance_pos ,0.0, 1.0);
+    out.cell_pos = model.instance_pos;
     return out;
 }
 
@@ -33,5 +35,9 @@ fn vs_main(
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    return vec4<f32>(1.0,1.0,1.0, 1.0);
+    // Create a subtle gradient based on position for visual interest
+    let color_r = 0.7 + 0.3 * (in.cell_pos.x + 1.0) * 0.5;
+    let color_g = 0.7 + 0.3 * (in.cell_pos.y + 1.0) * 0.5;
+    let color_b = 0.9;
+    return vec4<f32>(color_r, color_g, color_b, 1.0);
 }

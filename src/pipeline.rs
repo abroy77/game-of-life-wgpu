@@ -3,6 +3,7 @@ use crate::resources::Layouts;
 
 pub struct Pipelines {
     pub render: wgpu::RenderPipeline,
+    pub compute: wgpu::ComputePipeline,
 }
 
 impl Pipelines {
@@ -60,6 +61,18 @@ impl Pipelines {
             multiview: None,
             cache: None,
         });
+
+
+        // Compute Pipeline generation
+        let compute_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor{
+            label: Some("compute shader"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/compute.wgsl").into()),
+        });
+
+        let compute_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor{
+            label("compute pipeline layout"),
+            bind_group_layouts: &[]
+        })
 
         Self {
             render: render_pipeline,

@@ -19,36 +19,48 @@ use winit::{
 };
 use render::Renderer;
 
-pub struct State {
+pub struct App {
+    #[cfg(target_arch = "wasm32")]
+    proxy: Option<winit::event_loop::EventLoopProxy<GraphicsContext>>,
+    graphics: Option<GraphicsContext>,
+    simulation: Simulation,
+    input_handler: InputHandler,
+}
+
+pub struct GraphicsContext {
     surface: wgpu::Surface<'static>,
     device: wgpu::Device,
     queue: wgpu::Queue,
     surface_config: wgpu::SurfaceConfiguration,
-    is_surface_configured: bool,
     window: Arc<Window>,
+    is_surface_configured: bool,
     renderer: Renderer,
 }
 
-pub struct App {
-    #[cfg(target_arch = "wasm32")]
-    proxy: Option<winit::event_loop::EventLoopProxy<State>>,
-    state: Option<State>,
+pub struct Simulation {
+    // Add simulation state here
+}
+
+pub struct InputHandler {
+    // Add input state here
 }
 
 impl App {
-    pub fn new(#[cfg(target_arch = "wasm32")] event_loop: &EventLoop<State>) -> Self {
+    pub fn new(#[cfg(target_arch = "wasm32")] event_loop: &EventLoop<GraphicsContext>) -> Self {
         #[cfg(target_arch = "wasm32")]
         let proxy = Some(event_loop.create_proxy());
 
         Self {
-            state: None,
+            graphics: None,
+            simulation: Simulation::new(),
+            input_handler: InputHandler::new(),
             #[cfg(target_arch = "wasm32")]
             proxy,
         }
     }
 }
 
-impl ApplicationHandler<State> for App {
+impl ApplicationHandler<GraphicsContext> for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let window_attributes = Window::default_attributes();
         #[cfg(target_arch = "wasm32")]
@@ -67,29 +79,25 @@ impl ApplicationHandler<State> for App {
 
         #[cfg(not(target_arch = "wasm32"))]
         {
-            // If we are not on the web we can use pollster to await
-            self.state = Some(pollster::block_on(State::new(window)).unwrap());
+            self.graphics = Some(pollster::block_on(GraphicsContext::new(window)).unwrap());
         }
 
         #[cfg(target_arch = "wasm32")]
         {
-            // Run the future asynchronously
-            // and use the proxy to send
-            // results to the event loop
             if let Some(proxy) = self.proxy.take() {
                 wasm_bindgen_futures::spawn_local(async move {
                     assert!(
                         proxy
-                            .send_event(State::new(window).await.expect("Unable to create canvas!"))
+                            .send_event(GraphicsContext::new(window).await.expect("Unable to create graphics context!"))
                             .is_ok()
                     )
                 });
             }
         }
     }
+
     #[allow(unused_mut)]
-    fn user_event(&mut self, _event_loop: &ActiveEventLoop, mut event: State) {
-        // This is where proxy.send_event() ends up
+    fn user_event(&mut self, _event_loop: &ActiveEventLoop, mut event: GraphicsContext) {
         #[cfg(target_arch = "wasm32")]
         {
             event.window.request_redraw();
@@ -98,23 +106,26 @@ impl ApplicationHandler<State> for App {
                 event.window.inner_size().height,
             );
         }
-        self.state = Some(event)
+        self.graphics = Some(event)
     }
+
     fn window_event(
         &mut self,
         event_loop: &ActiveEventLoop,
         _window_id: winit::window::WindowId,
         event: WindowEvent,
     ) {
-        let state = match &mut self.state {
-            Some(canvas) => canvas,
+        let graphics = match &mut self.graphics {
+            Some(graphics) => graphics,
             None => return,
         };
+
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
-            WindowEvent::Resized(size) => state.resize(size.width, size.height),
+            WindowEvent::Resized(size) => graphics.resize(size.width, size.height),
             WindowEvent::RedrawRequested => {
-                _ = state.render();
+                self.simulation.update();
+                _ = graphics.render();
             }
             WindowEvent::KeyboardInput {
                 event:
@@ -124,12 +135,13 @@ impl ApplicationHandler<State> for App {
                         ..
                     },
                 ..
-            } => state.handle_key(event_loop, code, key_state.is_pressed()),
+            } => self.input_handler.handle_key(event_loop, code, key_state.is_pressed()),
             _ => {}
         }
     }
 }
-impl State {
+
+impl GraphicsContext {
     async fn new(window: Arc<Window>) -> anyhow::Result<Self> {
         let size = window.inner_size();
 
@@ -221,13 +233,6 @@ impl State {
         }
     }
     
-    fn handle_key(&mut self, event_loop: &ActiveEventLoop, code: KeyCode, is_pressed: bool) {
-        match (code, is_pressed) {
-            (KeyCode::Escape, true) => event_loop.exit(),
-            _ => {}
-        }
-    }
-    
     fn render(&mut self) -> anyhow::Result<(), wgpu::SurfaceError> {
         self.window.request_redraw();
         if !self.is_surface_configured {
@@ -250,6 +255,29 @@ impl State {
         self.queue.submit(std::iter::once(encoder.finish()));
         output.present();
         Ok(())
+    }
+}
+
+impl Simulation {
+    fn new() -> Self {
+        Self {}
+    }
+    
+    fn update(&mut self) {
+        // Add simulation logic here
+    }
+}
+
+impl InputHandler {
+    fn new() -> Self {
+        Self {}
+    }
+    
+    fn handle_key(&mut self, event_loop: &ActiveEventLoop, code: KeyCode, is_pressed: bool) {
+        match (code, is_pressed) {
+            (KeyCode::Escape, true) => event_loop.exit(),
+            _ => {}
+        }
     }
 }
 

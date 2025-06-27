@@ -11,7 +11,7 @@ pub struct Instance {
     position: [f32; 2],
 }
 
-pub const VERTICES: &[Vertex] = &[
+pub const CELL_VERTICES: &[Vertex] = &[
     Vertex {
         position: [-0.5, -0.5],
     },
@@ -70,7 +70,8 @@ impl Instance {
                     offset: 0,
                     shader_location: 1,
                     format: wgpu::VertexFormat::Float32x2,
-                }]               }
-            
+                }
+            ],
+        }
     }
 }
