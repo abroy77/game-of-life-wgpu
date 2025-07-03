@@ -3,16 +3,21 @@ name = "game-of-life"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+crate-type = ["cdylib","rlib"]
+
 [dependencies]
 anyhow = "1.0.98"
 bytemuck = "1.23.1"
-env_logger = "0.11.8"
+env_logger = "0.11.3"
+getrandom = { version = "0.3.3", features = ["wasm_js"] }
 log = "0.4.27"
 pollster = "0.4.0"
-wgpu = "25.0.2"
-winit = { version = "0.30.11", features = ["android-native-activity"] }
+rand = "0.9.1"
+wgpu = { version = "25.0.2", features = ["webgl"] }
+winit = { version = "0.30.11" , features = ["android-native-activity"]}
 
-[target.'cfg(target_arch="wasm32")'.dependencies]
+[target.'cfg(target_arch = "wasm32")'.dependencies]
 console_error_panic_hook = "0.1.7"
 console_log = "1.0.0"
 web-sys = { version = "0.3.77", features = ["Document", "Window", "HtmlCanvasElement", "Element"] }

@@ -1,45 +1,33 @@
-use crate::buffers::Buffers;
-use crate::resources::{BindGroups, Layouts};
-use crate::pipeline::Pipelines;
-use crate::constants::{ROWS, COLS};
+use crate::{compute::ComputePass, constants::{COLS, ROWS, BACKGROUND_COLOR}, gpu_resources::GpuResources};
+
 
 pub struct Renderer {
-    pub buffers: Buffers,
-    pub bind_groups: BindGroups,
-    pub pipelines: Pipelines,
+    gpu_resources: GpuResources,
 }
 
 impl Renderer {
-    pub fn new(device: &wgpu::Device, surface_format: wgpu::TextureFormat) -> Self {
-        let buffers = Buffers::new(device);
-        let layouts = Layouts::new(device);
-        let bind_groups = BindGroups::new(device, &layouts, &buffers);
-        let pipelines = Pipelines::new(device, surface_format, &layouts);
-
-        Self {
-            buffers,
-            bind_groups,
-            pipelines,
-        }
+    pub fn new(device: &wgpu::Device, surface_format: wgpu::TextureFormat, initial_state: &[u32]) -> Self {
+        let gpu_resources = GpuResources::new(device, surface_format, initial_state);
+        Self { gpu_resources }
     }
 
-    pub fn render(
-        &self,
-        encoder: &mut wgpu::CommandEncoder,
-        view: &wgpu::TextureView,
-    ) {
+    pub fn run_compute(&self, encoder: &mut wgpu::CommandEncoder) {
+        ComputePass::run(
+            encoder,
+            &self.gpu_resources.compute_pipeline,
+            &self.gpu_resources.compute_uniform_bind_group,
+            &self.gpu_resources.compute_state_bind_group,
+        );
+    }
+
+    pub fn render(&self, encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView) {
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("Render Pass"),
+            label: Some("Game of Life Render"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &view,
+                view,
                 resolve_target: None,
                 ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color {
-                        r: 0.1,
-                        g: 0.2,
-                        b: 0.3,
-                        a: 1.0,
-                    }),
+                    load: wgpu::LoadOp::Clear(BACKGROUND_COLOR),
                     store: wgpu::StoreOp::Store,
                 },
             })],
@@ -48,11 +36,16 @@ impl Renderer {
             occlusion_query_set: None,
         });
 
-        render_pass.set_pipeline(&self.pipelines.render);
-        render_pass.set_bind_group(0, &self.bind_groups.uniform, &[]);
-        render_pass.set_vertex_buffer(0, self.buffers.vertex.slice(..));
-        render_pass.set_vertex_buffer(1, self.buffers.instance.slice(..));
-        render_pass.set_index_buffer(self.buffers.index.slice(..), wgpu::IndexFormat::Uint16);
-        render_pass.draw_indexed(0..self.buffers.num_indices, 0, 0..(ROWS * COLS) as u32);
+        render_pass.set_pipeline(&self.gpu_resources.render_pipeline);
+        render_pass.set_bind_group(0, &self.gpu_resources.render_bind_group, &[]);
+        render_pass.set_bind_group(1, &self.gpu_resources.render_game_state_bind_group, &[]);
+        render_pass.set_vertex_buffer(0, self.gpu_resources.vertex_buffer.slice(..));
+        render_pass.set_vertex_buffer(1, self.gpu_resources.instance_buffer.slice(..));
+        render_pass.set_index_buffer(self.gpu_resources.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+        render_pass.draw_indexed(0..self.gpu_resources.num_indices, 0, 0..(ROWS * COLS) as u32);
+    }
+
+    pub fn step_simulation(&mut self) {
+        self.gpu_resources.swap_buffers();
     }
 }

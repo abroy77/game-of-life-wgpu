@@ -9,7 +9,8 @@ pub struct RenderUniforms {
     cols: u32,
     _pad: u32
 }
-
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct ComputeUniforms {
     rows: u32,
     cols: u32

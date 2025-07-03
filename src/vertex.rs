@@ -25,22 +25,17 @@ pub const CELL_VERTICES: &[Vertex] = &[
         position: [-0.5, 0.5],
     },
 ];
-pub const fn get_instances() -> [Instance; ROWS * COLS] {
-    let mut arr = [Instance {
-        position: [0.0, 0.0],
-    }; ROWS * COLS];
-    let mut i = 0;
-    while i < ROWS * COLS {
-        let row = i / COLS;
-        let col = i % COLS;
-        // x and y are the NDC coords of the center of the cells
-        let x = -1.0 + GAP + CELL_SIZE / 2.0 + col as f32 * (CELL_SIZE + GAP);
-        let y = -1.0 + GAP + CELL_SIZE / 2.0 + row as f32 * (CELL_SIZE + GAP);
-        // now make the position
-        arr[i] = Instance { position: [x, y] };
-        i += 1;
+pub fn get_instances() -> Vec<Instance> {
+    let mut instances = Vec::with_capacity(ROWS * COLS);
+    for row in 0..ROWS {
+        for col in 0..COLS {
+            // x and y are the NDC coords of the center of the cells
+            let x = -1.0 + GAP + CELL_SIZE / 2.0 + col as f32 * (CELL_SIZE + GAP);
+            let y = -1.0 + GAP + CELL_SIZE / 2.0 + row as f32 * (CELL_SIZE + GAP);
+            instances.push(Instance { position: [x, y] });
+        }
     }
-    arr
+    instances
 }
 
 
