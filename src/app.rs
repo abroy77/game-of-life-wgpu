@@ -1,15 +1,13 @@
-use std::sync::Arc;
+use crate::graphics::{self, GraphicsContext};
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
 use winit::{
     application::ApplicationHandler,
-    event::KeyEvent,
-    event::WindowEvent,
-    event_loop::EventLoop,
+    event::{KeyEvent, WindowEvent},
+    event_loop::{ActiveEventLoop, EventLoop},
     keyboard::{KeyCode, PhysicalKey},
-    window::{Window, WindowAttributes},
 };
 
 #[cfg(target_arch = "wasm32")]
@@ -42,7 +40,7 @@ pub fn say_hi() {
 //
 
 pub enum AppEvents {
-    NewWindow(Arc<Window>),
+    NewGraphicsContext(GraphicsContext),
 }
 
 pub struct App {
@@ -50,7 +48,7 @@ pub struct App {
     //page does not hang when waiting on resources.
     #[cfg(target_arch = "wasm32")]
     proxy: Option<EventLoopProxy<AppEvents>>,
-    window: Option<Arc<Window>>,
+    graphics_context: Option<GraphicsContext>,
 }
 
 impl App {
@@ -62,53 +60,21 @@ impl App {
         Ok(Self {
             #[cfg(target_arch = "wasm32")]
             proxy,
-            window: None,
+            graphics_context: None,
         })
     }
 }
 
-///This function is only for the web to revrieve the
-/// HTML canvas on which we will draw
-#[cfg(target_arch = "wasm32")]
-fn setup_window_with_canvas(window_attributes: WindowAttributes) -> WindowAttributes {
-    // JsCast brings trait to cast rust dtypes to js safely or unsafely
-    use wasm_bindgen::{JsCast, UnwrapThrowExt};
-    // allows winit to inceract with web elements
-    use winit::platform::web::WindowAttributesExtWebSys;
-
-    // get the browser window
-    let window = wgpu::web_sys::window().unwrap_throw();
-    // get the DOM in the window
-    let document = window.document().unwrap_throw();
-    // get the canvas element. We know our html has this ID for a HtmlCanvas type
-    // however rust can't be sure. hence we need the unchecked_into()
-    // to convert to a HtmlElement
-    let canvas = document.get_element_by_id("canvas").unwrap_throw();
-    // attach the canvas to the window attributes for window creation
-    window_attributes.with_canvas(Some(canvas.unchecked_into()))
-}
-
 impl ApplicationHandler<AppEvents> for App {
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
-        #[allow(unused_mut)]
-        let mut window_attributes = Window::default_attributes();
-
-        #[cfg(target_arch = "wasm32")]
-        {
-            // here is where we will attach the window to the HTML canvas on the web
-            window_attributes = setup_window_with_canvas(window_attributes);
-        }
-        // a winit window requires a an event loop to create it
-        // we use Arc to have multiple references to this window
-        let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
-
+        let window = graphics::get_window(event_loop);
         // Now getting the window in wgpu is an asynchronous task because we're asking the GPU to get
         // it for us, then we will use it
         // This differs on web and desktop so we need two variants of this.
         #[cfg(not(target_arch = "wasm32"))]
         {
             // On desktop we're using pollster which is a very simple async runner
-            self.window = Some(window);
+            self.graphics_context = Some(pollster::block_on(GraphicsContext::new(window)).unwrap());
         }
         #[cfg(target_arch = "wasm32")]
         {
@@ -122,7 +88,11 @@ impl ApplicationHandler<AppEvents> for App {
                             .send_event(
                                 // so we can send event because we parameterised our proxy in the 'App'
                                 // to be able to send 'State' as an event!
-                                AppEvents::NewWindow(window)
+                                AppEvents::NewGraphicsContext(
+                                    GraphicsContext::new(window)
+                                        .await
+                                        .expect(" Could not set up graphics context")
+                                )
                             )
                             .is_ok()
                     )
@@ -136,10 +106,10 @@ impl ApplicationHandler<AppEvents> for App {
         // 'event' is state because of how we've parameterised the App.
         // This is where the proxy.send_event() ends up
         match event {
-            AppEvents::NewWindow(window) => {
+            AppEvents::NewGraphicsContext(mut graphics_context) => {
                 #[cfg(target_arch = "wasm32")]
                 {
-                    window.request_redraw();
+                    graphics_context.request_redraw();
                     // state.resize(
                     //     state.window.inner_size().width,
                     //     state.window.inner_size().height,
@@ -150,7 +120,7 @@ impl ApplicationHandler<AppEvents> for App {
                 // in the web / desktop
                 // in web after this I don't think we need the proxy because the async steps of getting the
                 // window  / canvas are done. The app is ready!
-                self.window = Some(window);
+                self.graphics_context = Some(graphics_context);
             }
         }
     }
@@ -160,21 +130,30 @@ impl ApplicationHandler<AppEvents> for App {
         _window_id: winit::window::WindowId,
         event: winit::event::WindowEvent,
     ) {
-        // let state = match &mut self.state {
-        //     Some(state) => state,
-        //     None => return,
-        // };
+        let graphics_context = match &mut self.graphics_context {
+            Some(gc) => gc,
+            None => return,
+        };
 
         match event {
             WindowEvent::CloseRequested => {
                 event_loop.exit();
             }
             WindowEvent::Resized(size) => {
-
-                // state.resize(size.width, size.height);
+                graphics_context.resize(size.width, size.height);
             }
             WindowEvent::RedrawRequested => {
                 // state.render();
+                match graphics_context.render() {
+                    Ok(_) => {}
+                    Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
+                        let (width, height) = graphics_context.get_size().unwrap();
+                        graphics_context.resize(width, height);
+                    }
+                    Err(e) => {
+                        log::error!("Unable to render {e}");
+                    }
+                }
             }
             WindowEvent::KeyboardInput {
                 event:
@@ -184,12 +163,15 @@ impl ApplicationHandler<AppEvents> for App {
                         ..
                     },
                 ..
-            } => match (code, state.is_pressed()) {
-                (KeyCode::Escape, true) => event_loop.exit(),
-                _ => {}
-            },
+            } => self.handle_key(event_loop, code, state.is_pressed()),
             _ => {}
         }
+    }
+}
+
+impl App {
+    fn handle_key(&self, event_loop: &ActiveEventLoop, code: KeyCode, is_pressed: bool) {
+        if let (KeyCode::Escape, true) = (code, is_pressed) { event_loop.exit() }
     }
 }
 
