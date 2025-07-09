@@ -1,15 +1,21 @@
 use std::sync::Arc;
+use wgpu::util::RenderEncoder;
 use winit::{event_loop::ActiveEventLoop, window::Window};
+
+use crate::{
+    render_data::RenderData,
+    vertex::INDICES,
+};
 
 // putting these all in a seperate struct because
 // they are related and building them requires async functionality
 // I want an AppEvent to be able to send these back when ready.
 pub struct GraphicsContext {
     surface: wgpu::Surface<'static>,
-    device: wgpu::Device,
+    pub device: wgpu::Device,
     queue: wgpu::Queue,
-    surface_config: wgpu::SurfaceConfiguration,
-    is_surface_configured: bool,
+    pub surface_config: wgpu::SurfaceConfiguration,
+    pub is_surface_configured: bool,
     window: Arc<Window>,
 }
 
@@ -96,7 +102,7 @@ impl GraphicsContext {
         todo!()
     }
 
-    pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
+    pub fn render(&mut self, render_data: &RenderData) -> Result<(), wgpu::SurfaceError> {
         self.request_redraw();
 
         if !self.is_surface_configured {
@@ -137,16 +143,26 @@ impl GraphicsContext {
                     store: wgpu::StoreOp::Store,
                 },
             };
+            {
+                let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("Render Pass"),
+                    color_attachments: &[Some(clear_color_attachment)],
+                    depth_stencil_attachment: None,
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                });
 
-            let _ = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("Render Pass"),
-                color_attachments: &[Some(clear_color_attachment)],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-            });
+                render_pass.set_pipeline(&render_data.pipeline);
 
-            // using std::iter::once to make a simple iterable that yields
+                render_pass.set_vertex_buffer(0, render_data.vertex_buffer.slice(..));
+
+                render_pass.set_index_buffer(
+                    render_data.index_buffer.slice(..),
+                    wgpu::IndexFormat::Uint16,
+                );
+
+                render_pass.draw_indexed(0..INDICES.len() as u32, 0, 0..1);
+            } // using std::iter::once to make a simple iterable that yields
             // a single item. This means I don't need to make a vec or array.
             self.queue.submit(std::iter::once(encoder.finish()));
             output.present();

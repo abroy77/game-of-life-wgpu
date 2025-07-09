@@ -1,4 +1,7 @@
-use crate::graphics::{self, GraphicsContext};
+use crate::{
+    graphics::{self, GraphicsContext},
+    render_data::RenderData,
+};
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
@@ -13,32 +16,6 @@ use winit::{
 #[cfg(target_arch = "wasm32")]
 use winit::event_loop::EventLoopProxy;
 
-pub fn say_hi() {
-    println!("hello");
-}
-
-// pub struct State {
-//     window: Arc<Window>,
-// }
-
-// impl State {
-//     pub async fn new(window: Arc<Window>) -> anyhow::Result<Self> {
-//         Ok(State { window })
-//     }
-
-//     pub fn request_redraw(&mut self) {
-//         self.window.request_redraw();
-//     }
-
-//     pub fn resize(&mut self, width: u32, height: u32) {
-//         todo!()
-//     }
-//     pub fn render(&mut self) {
-//         todo!()
-//     }
-// }
-//
-
 pub enum AppEvents {
     NewGraphicsContext(GraphicsContext),
 }
@@ -49,6 +26,7 @@ pub struct App {
     #[cfg(target_arch = "wasm32")]
     proxy: Option<EventLoopProxy<AppEvents>>,
     graphics_context: Option<GraphicsContext>,
+    render_data: Option<RenderData>,
 }
 
 impl App {
@@ -61,6 +39,7 @@ impl App {
             #[cfg(target_arch = "wasm32")]
             proxy,
             graphics_context: None,
+            render_data: None,
         })
     }
 }
@@ -98,6 +77,17 @@ impl ApplicationHandler<AppEvents> for App {
                     )
                 });
             }
+        }
+        // now that the graphics context is setup we can setup the render_pipeline if it's not there already
+        if let None = self.render_data {
+            // setup the render stuff now that the window and surface configurations are made
+            self.render_data = Some(
+                RenderData::new(
+                    &self.graphics_context.as_ref().unwrap().device,
+                    &self.graphics_context.as_ref().unwrap().surface_config,
+                )
+                .unwrap(),
+            );
         }
     }
     #[allow(unused_mut)]
@@ -144,7 +134,8 @@ impl ApplicationHandler<AppEvents> for App {
             }
             WindowEvent::RedrawRequested => {
                 // state.render();
-                match graphics_context.render() {
+                //
+                match graphics_context.render(self.render_data.as_ref().unwrap()) {
                     Ok(_) => {}
                     Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
                         let (width, height) = graphics_context.get_size().unwrap();
@@ -171,7 +162,9 @@ impl ApplicationHandler<AppEvents> for App {
 
 impl App {
     fn handle_key(&self, event_loop: &ActiveEventLoop, code: KeyCode, is_pressed: bool) {
-        if let (KeyCode::Escape, true) = (code, is_pressed) { event_loop.exit() }
+        if let (KeyCode::Escape, true) = (code, is_pressed) {
+            event_loop.exit()
+        }
     }
 }
 
