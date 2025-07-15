@@ -1,16 +1,22 @@
+use rand::{Rng, rng, rngs::ThreadRng, seq::IteratorRandom};
 // use crate::config::CONFIG;
 use wgpu::{BufferUsages, util::DeviceExt};
 
-use crate::vertex::{CELL_VERTICES, INDICES, Vertex};
+use crate::{
+    config::CONFIG,
+    graphics::RenderUniform,
+    vertex::{CELL_VERTICES, INDICES, Instance, Vertex, get_instances},
+};
 
-/// Stuff needed to render things on the screen
-///
+// Stuff needed to render things on the screen
 
 pub struct RenderData {
     pub pipeline: wgpu::RenderPipeline,
     pub vertex_buffer: wgpu::Buffer,
     pub index_buffer: wgpu::Buffer,
-    // instance_buffer: wgpu::Buffer,
+    pub instance_buffer: wgpu::Buffer,
+    pub uniform_bind_group: wgpu::BindGroup,
+    rng: ThreadRng,
 }
 
 impl RenderData {
@@ -36,10 +42,51 @@ impl RenderData {
             usage: BufferUsages::INDEX,
         });
 
+        let instances = get_instances();
+
+        let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Instance Buffer"),
+            contents: bytemuck::cast_slice(&instances),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+
+        let uniform = RenderUniform::default();
+        let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Render Uniform Buffer"),
+            contents: bytemuck::cast_slice(&[uniform]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
+        let uniform_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("Render Uniform Bind Group Layout"),
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+            });
+
+        let uniform_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Render Uniform Bind Group"),
+            layout: &uniform_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: uniform_buffer.as_entire_binding(),
+            }],
+        });
+
+        let rng = rng();
+
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Render Pipeline Layout"),
-                bind_group_layouts: &[],
+                bind_group_layouts: &[&uniform_bind_group_layout],
                 push_constant_ranges: &[],
             });
 
@@ -55,7 +102,7 @@ impl RenderData {
                 module: &shader,
                 entry_point: Some("vs_main"),
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
-                buffers: &[Vertex::desc()],
+                buffers: &[Vertex::desc(), Instance::desc()],
             },
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList,
@@ -90,7 +137,15 @@ impl RenderData {
             pipeline,
             vertex_buffer,
             index_buffer,
+            instance_buffer,
+            rng,
+            uniform_bind_group,
         })
+    }
+
+    pub fn get_random_instances(&mut self) -> Vec<usize> {
+        let count = self.rng.random_range(0..=CONFIG.num_elements);
+        (0..=CONFIG.num_elements).choose_multiple(&mut self.rng, count)
     }
 }
 

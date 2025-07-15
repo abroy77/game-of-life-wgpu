@@ -1,11 +1,7 @@
+use crate::{config::CONFIG, render_data::RenderData, vertex::INDICES};
 use std::sync::Arc;
 use wgpu::util::RenderEncoder;
 use winit::{event_loop::ActiveEventLoop, window::Window};
-
-use crate::{
-    render_data::RenderData,
-    vertex::INDICES,
-};
 
 // putting these all in a seperate struct because
 // they are related and building them requires async functionality
@@ -17,6 +13,19 @@ pub struct GraphicsContext {
     pub surface_config: wgpu::SurfaceConfiguration,
     pub is_surface_configured: bool,
     window: Arc<Window>,
+}
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct RenderUniform {
+    pub cell_size: f32,
+}
+
+impl Default for RenderUniform {
+    fn default() -> Self {
+        Self {
+            cell_size: CONFIG.cell_size,
+        }
+    }
 }
 
 impl GraphicsContext {
@@ -142,6 +151,7 @@ impl GraphicsContext {
                     // STORE: keep the data so it's seen on the screen
                     store: wgpu::StoreOp::Store,
                 },
+                depth_slice: None,
             };
             {
                 let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -153,15 +163,20 @@ impl GraphicsContext {
                 });
 
                 render_pass.set_pipeline(&render_data.pipeline);
-
+                render_pass.set_bind_group(0, &render_data.uniform_bind_group, &[]);
                 render_pass.set_vertex_buffer(0, render_data.vertex_buffer.slice(..));
+                render_pass.set_vertex_buffer(1, render_data.instance_buffer.slice(..));
 
                 render_pass.set_index_buffer(
                     render_data.index_buffer.slice(..),
                     wgpu::IndexFormat::Uint16,
                 );
 
-                render_pass.draw_indexed(0..INDICES.len() as u32, 0, 0..1);
+                // here is where we will randomly choose which instances to draw in different
+                // draw calls.
+                // let instance_indeces = render_data.get_random_instances();
+
+                render_pass.draw_indexed(0..INDICES.len() as u32, 0, 0..CONFIG.num_elements as u32);
             } // using std::iter::once to make a simple iterable that yields
             // a single item. This means I don't need to make a vec or array.
             self.queue.submit(std::iter::once(encoder.finish()));

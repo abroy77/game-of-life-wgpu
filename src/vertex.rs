@@ -1,4 +1,5 @@
-// use crate::config::CONFIG;
+use crate::config::CONFIG;
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 
@@ -25,31 +26,25 @@ pub const CELL_VERTICES: &[Vertex] = &[
         position: [-0.5, 0.5],
     },
 ];
-// pub fn get_instances() -> Vec<Instance> {
-//     let mut result = Vec::with_capacity(CONFIG.rows * CONFIG.cols);
-//     for row in 0..rows {
-//         for col in 0..cols {
-//         let x = -1.0 + GAP + CELL_SIZE / 2.0 + col as f32 * (CELL_SIZE + GAP);
-//         let y = -1.0 + GAP + CELL_SIZE / 2.0 + row as f32 * (CELL_SIZE + GAP);
 
-//         }
-//     }
-//     let mut arr = [Instance {
-//         position: [0.0, 0.0],
-//     }; ROWS * COLS];
-//     let mut i = 0;
-//     while i < ROWS * COLS {
-//         let row = i / COLS;
-//         let col = i % COLS;
-//         // x and y are the NDC coords of the center of the cells
-//         let x = -1.0 + GAP + CELL_SIZE / 2.0 + col as f32 * (CELL_SIZE + GAP);
-//         let y = -1.0 + GAP + CELL_SIZE / 2.0 + row as f32 * (CELL_SIZE + GAP);
-//         // now make the position
-//         arr[i] = Instance { position: [x, y] };
-//         i += 1;
-//     }
-//     arr
-// }
+pub fn get_instances() -> Vec<Instance> {
+    let mut result = Vec::with_capacity(CONFIG.rows * CONFIG.cols);
+    for row in 0..CONFIG.rows {
+        for col in 0..CONFIG.cols {
+            let x = -1.0
+                + CONFIG.gap_size
+                + CONFIG.cell_size / 2.0
+                + col as f32 * (CONFIG.cell_size + CONFIG.gap_size);
+            let y = -1.0
+                + CONFIG.gap_size
+                + CONFIG.cell_size / 2.0
+                + row as f32 * (CONFIG.cell_size + CONFIG.gap_size);
+
+            result.push(Instance { position: [x, y] });
+        }
+    }
+    result
+}
 
 pub const INDICES: &[u16] = &[0, 1, 2, 2, 3, 0];
 
