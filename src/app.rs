@@ -1,4 +1,7 @@
+use std::time::Instant;
+
 use crate::{
+    config::CONFIG,
     graphics::{self, GraphicsContext},
     render_data::RenderData,
 };
@@ -27,6 +30,7 @@ pub struct App {
     proxy: Option<EventLoopProxy<AppEvents>>,
     graphics_context: Option<GraphicsContext>,
     render_data: Option<RenderData>,
+    next_frame: Instant,
 }
 
 impl App {
@@ -35,11 +39,13 @@ impl App {
     ) -> anyhow::Result<Self> {
         #[cfg(target_arch = "wasm32")]
         let proxy = Some(event_loop.create_proxy());
+        let next_frame = Instant::now() + CONFIG.frame_duration;
         Ok(Self {
             #[cfg(target_arch = "wasm32")]
             proxy,
             graphics_context: None,
             render_data: None,
+            next_frame,
         })
     }
 }
@@ -52,7 +58,7 @@ impl ApplicationHandler<AppEvents> for App {
         // This differs on web and desktop so we need two variants of this.
         #[cfg(not(target_arch = "wasm32"))]
         {
-            // On desktop we're using pollster which is a very simple async runner
+            // On desktop we're using pollster which is a very simple async runnowner
             self.graphics_context = Some(pollster::block_on(GraphicsContext::new(window)).unwrap());
         }
         #[cfg(target_arch = "wasm32")]
@@ -79,7 +85,7 @@ impl ApplicationHandler<AppEvents> for App {
             }
         }
         // now that the graphics context is setup we can setup the render_pipeline if it's not there already
-        if let None = self.render_data {
+        if self.render_data.is_none() {
             // setup the render stuff now that the window and surface configurations are made
             self.render_data = Some(
                 RenderData::new(
@@ -89,6 +95,9 @@ impl ApplicationHandler<AppEvents> for App {
                 .unwrap(),
             );
         }
+
+        self.next_frame = Instant::now() + CONFIG.frame_duration;
+        event_loop.set_control_flow(winit::event_loop::ControlFlow::WaitUntil(self.next_frame));
     }
     #[allow(unused_mut)]
     fn user_event(&mut self, _event_loop: &winit::event_loop::ActiveEventLoop, event: AppEvents) {
@@ -134,7 +143,7 @@ impl ApplicationHandler<AppEvents> for App {
             }
             WindowEvent::RedrawRequested => {
                 // state.render();
-                //
+                graphics_context.update(self.render_data.as_mut().unwrap());
                 match graphics_context.render(self.render_data.as_ref().unwrap()) {
                     Ok(_) => {}
                     Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
@@ -145,6 +154,7 @@ impl ApplicationHandler<AppEvents> for App {
                         log::error!("Unable to render {e}");
                     }
                 }
+                self.next_frame = Instant::now() + CONFIG.frame_duration;
             }
             WindowEvent::KeyboardInput {
                 event:
@@ -156,6 +166,15 @@ impl ApplicationHandler<AppEvents> for App {
                 ..
             } => self.handle_key(event_loop, code, state.is_pressed()),
             _ => {}
+        }
+    }
+    fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
+        let now = Instant::now();
+        if now >= self.next_frame {
+            if let Some(gc) = &mut self.graphics_context {
+                gc.request_redraw();
+            }
+            self.next_frame += CONFIG.frame_duration;
         }
     }
 }

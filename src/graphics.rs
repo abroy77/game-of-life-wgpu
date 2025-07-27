@@ -1,6 +1,5 @@
 use crate::{config::CONFIG, render_data::RenderData, vertex::INDICES};
 use std::sync::Arc;
-use wgpu::util::RenderEncoder;
 use winit::{event_loop::ActiveEventLoop, window::Window};
 
 // putting these all in a seperate struct because
@@ -14,16 +13,20 @@ pub struct GraphicsContext {
     pub is_surface_configured: bool,
     window: Arc<Window>,
 }
-#[repr(C)]
+#[repr(C, align(16))]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct RenderUniform {
     pub cell_size: f32,
+    pub _pad: [f32; 3],
+    pub _pad_more: [f32; 4],
 }
 
 impl Default for RenderUniform {
     fn default() -> Self {
         Self {
             cell_size: CONFIG.cell_size,
+            _pad: [0.0; 3],
+            _pad_more: [0.0; 4],
         }
     }
 }
@@ -107,12 +110,19 @@ impl GraphicsContext {
             self.is_surface_configured = true;
         }
     }
-    pub fn update(&mut self) {
-        todo!()
+    pub fn update(&mut self, render_data: &mut RenderData) {
+        // this is probably where our ping pong logic will begin! we want
+        // to have a random initial state.
+        render_data.game_state.update();
+        self.queue.write_buffer(
+            &render_data.game_state_buffer,
+            0,
+            bytemuck::cast_slice(render_data.game_state.get_state()),
+        );
     }
 
     pub fn render(&mut self, render_data: &RenderData) -> Result<(), wgpu::SurfaceError> {
-        self.request_redraw();
+        // self.request_redraw();
 
         if !self.is_surface_configured {
             // don't render unless surface is configured
@@ -161,12 +171,10 @@ impl GraphicsContext {
                     timestamp_writes: None,
                     occlusion_query_set: None,
                 });
-
                 render_pass.set_pipeline(&render_data.pipeline);
-                render_pass.set_bind_group(0, &render_data.uniform_bind_group, &[]);
+                render_pass.set_bind_group(0, &render_data.render_bind_group, &[]);
                 render_pass.set_vertex_buffer(0, render_data.vertex_buffer.slice(..));
                 render_pass.set_vertex_buffer(1, render_data.instance_buffer.slice(..));
-
                 render_pass.set_index_buffer(
                     render_data.index_buffer.slice(..),
                     wgpu::IndexFormat::Uint16,

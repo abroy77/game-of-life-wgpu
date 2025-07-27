@@ -1,3 +1,4 @@
 rows = 10
 cols = 10
-gap_ratio = 0.05
+gap_ratio = 0.1
+fps = 5

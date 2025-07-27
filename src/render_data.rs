@@ -1,9 +1,8 @@
-use rand::{Rng, rng, rngs::ThreadRng, seq::IteratorRandom};
 // use crate::config::CONFIG;
 use wgpu::{BufferUsages, util::DeviceExt};
 
 use crate::{
-    config::CONFIG,
+    game_state::GameState,
     graphics::RenderUniform,
     vertex::{CELL_VERTICES, INDICES, Instance, Vertex, get_instances},
 };
@@ -15,8 +14,9 @@ pub struct RenderData {
     pub vertex_buffer: wgpu::Buffer,
     pub index_buffer: wgpu::Buffer,
     pub instance_buffer: wgpu::Buffer,
-    pub uniform_bind_group: wgpu::BindGroup,
-    rng: ThreadRng,
+    pub game_state_buffer: wgpu::Buffer,
+    pub game_state: GameState,
+    pub render_bind_group: wgpu::BindGroup,
 }
 
 impl RenderData {
@@ -49,44 +49,69 @@ impl RenderData {
             contents: bytemuck::cast_slice(&instances),
             usage: wgpu::BufferUsages::VERTEX,
         });
+        let game_state = GameState::default();
+        let game_state_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Current State Render Buffer"),
+            contents: bytemuck::cast_slice(game_state.get_state()),
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        });
 
         let uniform = RenderUniform::default();
         let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Render Uniform Buffer"),
-            contents: bytemuck::cast_slice(&[uniform]),
+            contents: bytemuck::bytes_of(&uniform),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
-        let uniform_bind_group_layout =
+        dbg!(uniform_buffer.size());
+        dbg!(std::mem::size_of::<RenderUniform>());
+
+        let render_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("Render Uniform Bind Group Layout"),
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
                     },
-                    count: None,
-                }],
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: true },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                ],
             });
 
-        let uniform_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        let render_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Render Uniform Bind Group"),
-            layout: &uniform_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: uniform_buffer.as_entire_binding(),
-            }],
+            layout: &render_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: uniform_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: game_state_buffer.as_entire_binding(),
+                },
+            ],
         });
-
-        let rng = rng();
 
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Render Pipeline Layout"),
-                bind_group_layouts: &[&uniform_bind_group_layout],
+                bind_group_layouts: &[&render_bind_group_layout],
                 push_constant_ranges: &[],
             });
 
@@ -125,7 +150,7 @@ impl RenderData {
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: surface_config.format,
-                    blend: Some(wgpu::BlendState::REPLACE),
+                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
             }),
@@ -133,19 +158,30 @@ impl RenderData {
             cache: None,
         });
 
+        // let's setup a random state to send as a buffer which we will randomise
+        // at every update loop
+        // let current_state_vec = get_random_instances(&mut rng);
+        // let current_state = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        //     label: Some("Current State Render Buffer"),
+        //     contents: bytemuck::cast_slice(&current_state_vec),
+        //     usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        // });
+
+        // let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        //     label: Some("Cell Index buffer"),
+        //     contents: bytemuck::cast_slice(INDICES),
+        //     usage: BufferUsages::INDEX,
+        // });
+
         Ok(Self {
             pipeline,
             vertex_buffer,
             index_buffer,
             instance_buffer,
-            rng,
-            uniform_bind_group,
+            game_state,
+            game_state_buffer,
+            render_bind_group,
         })
-    }
-
-    pub fn get_random_instances(&mut self) -> Vec<usize> {
-        let count = self.rng.random_range(0..=CONFIG.num_elements);
-        (0..=CONFIG.num_elements).choose_multiple(&mut self.rng, count)
     }
 }
 
