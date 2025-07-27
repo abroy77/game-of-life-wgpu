@@ -1,5 +1,7 @@
 use crate::{config::CONFIG, render_data::RenderData, vertex::INDICES};
 use std::sync::Arc;
+#[cfg(target_arch = "wasm32")]
+use winit::window::WindowAttributes;
 use winit::{event_loop::ActiveEventLoop, window::Window};
 
 // putting these all in a seperate struct because
