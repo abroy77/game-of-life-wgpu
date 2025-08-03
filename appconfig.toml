@@ -1,4 +1,5 @@
-rows = 10
-cols = 10
+rows = 82
+cols = 82
 gap_ratio = 0.1
 fps = 5
+init_rand_threshold = 0.5

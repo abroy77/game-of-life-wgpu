@@ -5,6 +5,7 @@ use web_time::Instant;
 
 use crate::{
     config::CONFIG,
+    game_data::GameData,
     graphics::{self, GraphicsContext},
     render_data::RenderData,
 };
@@ -33,6 +34,7 @@ pub struct App {
     proxy: Option<EventLoopProxy<AppEvents>>,
     graphics_context: Option<GraphicsContext>,
     render_data: Option<RenderData>,
+    game_data: Option<GameData>,
     next_frame: Instant,
 }
 
@@ -40,21 +42,35 @@ impl App {
     pub fn new(
         #[cfg(target_arch = "wasm32")] event_loop: &EventLoop<AppEvents>,
     ) -> anyhow::Result<Self> {
+        dbg!("getting proxy");
         #[cfg(target_arch = "wasm32")]
         let proxy = Some(event_loop.create_proxy());
+
+        dbg!("pre frame");
         let next_frame = Instant::now() + CONFIG.frame_duration;
+        dbg!("post frame");
+
+        dbg!("returning App");
         Ok(Self {
             #[cfg(target_arch = "wasm32")]
             proxy,
             graphics_context: None,
             render_data: None,
+            game_data: None,
             next_frame,
         })
     }
+
+    // pub fn update_state(&mut self) {
+    //     if let Some(game_data) = self.game_data.as_mut() {
+    //         game_data.update();
+    //     }
+    // }
 }
 
 impl ApplicationHandler<AppEvents> for App {
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
+        print!("resumed");
         let window = graphics::get_window(event_loop);
         // Now getting the window in wgpu is an asynchronous task because we're asking the GPU to get
         // it for us, then we will use it
@@ -87,13 +103,24 @@ impl ApplicationHandler<AppEvents> for App {
                 });
             }
         }
+
+        // set up the game state now that gpu is ready.
+        if self.game_data.is_none() {
+            let device = &self.graphics_context.as_ref().unwrap().device;
+
+            self.game_data = Some(GameData::new(device));
+        }
         // now that the graphics context is setup we can setup the render_pipeline if it's not there already
         if self.render_data.is_none() {
             // setup the render stuff now that the window and surface configurations are made
+
+            let device = &self.graphics_context.as_ref().unwrap().device;
+            let surface_config = &self.graphics_context.as_ref().unwrap().surface_config;
             self.render_data = Some(
                 RenderData::new(
-                    &self.graphics_context.as_ref().unwrap().device,
-                    &self.graphics_context.as_ref().unwrap().surface_config,
+                    device,
+                    surface_config,
+                    &GameData::get_render_bind_group_layout(device),
                 )
                 .unwrap(),
             );
@@ -145,9 +172,13 @@ impl ApplicationHandler<AppEvents> for App {
                 graphics_context.resize(size.width, size.height);
             }
             WindowEvent::RedrawRequested => {
-                // state.render();
-                graphics_context.update(self.render_data.as_mut().unwrap());
-                match graphics_context.render(self.render_data.as_ref().unwrap()) {
+                match graphics_context.render(
+                    self.render_data.as_ref().unwrap(),
+                    self.game_data
+                        .as_ref()
+                        .unwrap()
+                        .get_current_render_bind_group(),
+                ) {
                     Ok(_) => {}
                     Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
                         let (width, height) = graphics_context.get_size().unwrap();
@@ -157,6 +188,8 @@ impl ApplicationHandler<AppEvents> for App {
                         log::error!("Unable to render {e}");
                     }
                 }
+                // graphics_context.update(self.render_data.as_mut().unwrap());
+                graphics_context.update(self.game_data.as_mut().unwrap());
                 self.next_frame = Instant::now() + CONFIG.frame_duration;
             }
             WindowEvent::KeyboardInput {
@@ -203,11 +236,13 @@ pub fn run() -> anyhow::Result<()> {
     // re-emphasising that the 'event' is our state. we're calling a change to our state the event in the loop
     let event_loop = EventLoop::<AppEvents>::with_user_event().build()?;
 
+    dbg!("making the App");
     let mut app = App::new(
         #[cfg(target_arch = "wasm32")]
         &event_loop,
     )?;
 
+    dbg!("running the app");
     event_loop.run_app(&mut app)?;
 
     Ok(())

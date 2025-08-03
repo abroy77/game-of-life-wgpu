@@ -1,12 +1,9 @@
-use crate::{config::CONFIG, render_data::RenderData, vertex::INDICES};
+use crate::{config::CONFIG, game_data::GameData, render_data::RenderData, vertex::INDICES};
 use std::sync::Arc;
 #[cfg(target_arch = "wasm32")]
 use winit::window::WindowAttributes;
 use winit::{event_loop::ActiveEventLoop, window::Window};
 
-// putting these all in a seperate struct because
-// they are related and building them requires async functionality
-// I want an AppEvent to be able to send these back when ready.
 pub struct GraphicsContext {
     surface: wgpu::Surface<'static>,
     pub device: wgpu::Device,
@@ -112,20 +109,100 @@ impl GraphicsContext {
             self.is_surface_configured = true;
         }
     }
-    pub fn update(&mut self, render_data: &mut RenderData) {
-        // this is probably where our ping pong logic will begin! we want
-        // to have a random initial state.
-        render_data.game_state.update();
-        self.queue.write_buffer(
-            &render_data.game_state_buffer,
-            0,
-            bytemuck::cast_slice(render_data.game_state.get_state()),
-        );
+    pub fn update(&mut self, game_data: &mut GameData) {
+        if !self.is_surface_configured {
+            println!("no surface mate rip");
+            // don't update unless surface is configured
+            return;
+        } else {
+            let mut encoder = self
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("Compute Encoder"),
+                });
+
+            {
+                let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                    label: Some("Compute Pass"),
+                    timestamp_writes: None,
+                });
+
+                compute_pass.set_pipeline(&game_data.compute_pipeline);
+                compute_pass.set_bind_group(0, &game_data.compute_uniform_bind_group, &[]);
+                compute_pass.set_bind_group(1, game_data.get_current_compute_bind_group(), &[]);
+                compute_pass.dispatch_workgroups(
+                    CONFIG.compute_dispatches[0] as u32,
+                    CONFIG.compute_dispatches[1] as u32,
+                    1,
+                );
+            } // using std::iter::once to make a simple iterable that yields
+            // a single item. This means I don't need to make a vec or array.
+            let buffer_size =
+                (CONFIG.num_elements * std::mem::size_of::<u32>()) as wgpu::BufferAddress;
+            let staging_buffer_a = self.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("Staging Buffer A"),
+                size: buffer_size,
+                usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+            encoder.copy_buffer_to_buffer(
+                &game_data.game_state_buffer_a,
+                0,
+                &staging_buffer_a,
+                0,
+                buffer_size,
+            );
+            let staging_buffer_b = self.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("Staging Buffer B"),
+                size: buffer_size,
+                usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+            encoder.copy_buffer_to_buffer(
+                &game_data.game_state_buffer_b,
+                0,
+                &staging_buffer_b,
+                0,
+                buffer_size,
+            );
+            self.queue.submit(std::iter::once(encoder.finish()));
+
+            let buffer_slice_a = staging_buffer_a.slice(..);
+            buffer_slice_a.map_async(wgpu::MapMode::Read, |result| {
+                if result.is_ok() {
+                }
+            });
+
+            _ = self.device.poll(wgpu::PollType::Wait);
+            let data = buffer_slice_a.get_mapped_range();
+            let cells: &[u32] = bytemuck::cast_slice(&data);
+            println!("Current Data A: {:?}", cells);
+            drop(data);
+            staging_buffer_a.unmap();
+
+            let buffer_slice_b = staging_buffer_b.slice(..);
+            buffer_slice_b.map_async(wgpu::MapMode::Read, |result| {
+                if result.is_ok() {
+                }
+            });
+
+            _ = self.device.poll(wgpu::PollType::Wait);
+            let data = buffer_slice_b.get_mapped_range();
+            let cells: &[u32] = bytemuck::cast_slice(&data);
+            println!("Current Data B: {:?}", cells);
+            drop(data);
+            staging_buffer_b.unmap();
+
+
+            game_data.swap_current();
+        }
     }
 
-    pub fn render(&mut self, render_data: &RenderData) -> Result<(), wgpu::SurfaceError> {
-        // self.request_redraw();
-
+    pub fn render(
+        &mut self,
+        render_data: &RenderData,
+        game_state_bind_group: &wgpu::BindGroup,
+    ) -> Result<(), wgpu::SurfaceError> {
         if !self.is_surface_configured {
             // don't render unless surface is configured
             Ok(())
@@ -174,7 +251,8 @@ impl GraphicsContext {
                     occlusion_query_set: None,
                 });
                 render_pass.set_pipeline(&render_data.pipeline);
-                render_pass.set_bind_group(0, &render_data.render_bind_group, &[]);
+                render_pass.set_bind_group(0, &render_data.render_uniform_bind_group, &[]);
+                render_pass.set_bind_group(1, game_state_bind_group, &[]);
                 render_pass.set_vertex_buffer(0, render_data.vertex_buffer.slice(..));
                 render_pass.set_vertex_buffer(1, render_data.instance_buffer.slice(..));
                 render_pass.set_index_buffer(
@@ -182,10 +260,10 @@ impl GraphicsContext {
                     wgpu::IndexFormat::Uint16,
                 );
 
-                // here is where we will randomly choose which instances to draw in different
+                // here is where we will choose which instances to draw in different
                 // draw calls.
-                // let instance_indeces = render_data.get_random_instances();
-
+                // Our current state_buffer in the game_state_bind group will control which
+                // cells are shown as alive.
                 render_pass.draw_indexed(0..INDICES.len() as u32, 0, 0..CONFIG.num_elements as u32);
             } // using std::iter::once to make a simple iterable that yields
             // a single item. This means I don't need to make a vec or array.
