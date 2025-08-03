@@ -137,61 +137,61 @@ impl GraphicsContext {
                 );
             } // using std::iter::once to make a simple iterable that yields
             // a single item. This means I don't need to make a vec or array.
-            let buffer_size =
-                (CONFIG.num_elements * std::mem::size_of::<u32>()) as wgpu::BufferAddress;
-            let staging_buffer_a = self.device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some("Staging Buffer A"),
-                size: buffer_size,
-                usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-                mapped_at_creation: false,
-            });
-            encoder.copy_buffer_to_buffer(
-                &game_data.game_state_buffer_a,
-                0,
-                &staging_buffer_a,
-                0,
-                buffer_size,
-            );
-            let staging_buffer_b = self.device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some("Staging Buffer B"),
-                size: buffer_size,
-                usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-                mapped_at_creation: false,
-            });
-            encoder.copy_buffer_to_buffer(
-                &game_data.game_state_buffer_b,
-                0,
-                &staging_buffer_b,
-                0,
-                buffer_size,
-            );
+            // let buffer_size =
+            //     (CONFIG.num_elements * std::mem::size_of::<u32>()) as wgpu::BufferAddress;
+            // let staging_buffer_a = self.device.create_buffer(&wgpu::BufferDescriptor {
+            //     label: Some("Staging Buffer A"),
+            //     size: buffer_size,
+            //     usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            //     mapped_at_creation: false,
+            // });
+            // encoder.copy_buffer_to_buffer(
+            //     &game_data.game_state_buffer_a,
+            //     0,
+            //     &staging_buffer_a,
+            //     0,
+            //     buffer_size,
+            // );
+            // let staging_buffer_b = self.device.create_buffer(&wgpu::BufferDescriptor {
+            //     label: Some("Staging Buffer B"),
+            //     size: buffer_size,
+            //     usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            //     mapped_at_creation: false,
+            // });
+            // encoder.copy_buffer_to_buffer(
+            //     &game_data.game_state_buffer_b,
+            //     0,
+            //     &staging_buffer_b,
+            //     0,
+            //     buffer_size,
+            // );
             self.queue.submit(std::iter::once(encoder.finish()));
 
-            let buffer_slice_a = staging_buffer_a.slice(..);
-            buffer_slice_a.map_async(wgpu::MapMode::Read, |result| {
-                if result.is_ok() {
-                }
-            });
+            // let buffer_slice_a = staging_buffer_a.slice(..);
+            // buffer_slice_a.map_async(wgpu::MapMode::Read, |result| {
+            //     if result.is_ok() {
+            //     }
+            // });
 
-            _ = self.device.poll(wgpu::PollType::Wait);
-            let data = buffer_slice_a.get_mapped_range();
-            let cells: &[u32] = bytemuck::cast_slice(&data);
-            println!("Current Data A: {:?}", cells);
-            drop(data);
-            staging_buffer_a.unmap();
+            // _ = self.device.poll(wgpu::PollType::Wait);
+            // let data = buffer_slice_a.get_mapped_range();
+            // let cells: &[u32] = bytemuck::cast_slice(&data);
+            // println!("Current Data A: {:?}", cells);
+            // drop(data);
+            // staging_buffer_a.unmap();
 
-            let buffer_slice_b = staging_buffer_b.slice(..);
-            buffer_slice_b.map_async(wgpu::MapMode::Read, |result| {
-                if result.is_ok() {
-                }
-            });
+            // let buffer_slice_b = staging_buffer_b.slice(..);
+            // buffer_slice_b.map_async(wgpu::MapMode::Read, |result| {
+            //     if result.is_ok() {
+            //     }
+            // });
 
-            _ = self.device.poll(wgpu::PollType::Wait);
-            let data = buffer_slice_b.get_mapped_range();
-            let cells: &[u32] = bytemuck::cast_slice(&data);
-            println!("Current Data B: {:?}", cells);
-            drop(data);
-            staging_buffer_b.unmap();
+            // _ = self.device.poll(wgpu::PollType::Wait);
+            // let data = buffer_slice_b.get_mapped_range();
+            // let cells: &[u32] = bytemuck::cast_slice(&data);
+            // println!("Current Data B: {:?}", cells);
+            // drop(data);
+            // staging_buffer_b.unmap();
 
 
             game_data.swap_current();
