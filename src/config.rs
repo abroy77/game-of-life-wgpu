@@ -1,4 +1,7 @@
+#[cfg(not(target_arch = "wasm32"))]
 use std::time::Duration;
+#[cfg(target_arch = "wasm32")]
+use web_time::Duration;
 
 use config::Config;
 use once_cell::sync::Lazy;
@@ -60,6 +63,7 @@ impl From<RawConfig> for AppConfig {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 pub fn load_config() -> AppConfig {
     let raw_config: RawConfig = Config::builder()
         .add_source(config::File::with_name("appconfig"))
@@ -72,4 +76,23 @@ pub fn load_config() -> AppConfig {
     println!("App Config:\n{:?}", &app_config);
     app_config
 }
+
+/// build at compile time using include_str!
+#[cfg(target_arch = "wasm32")]
+pub fn load_config() -> AppConfig {
+    use config::FileFormat;
+    let config_str: &str = include_str!("../appconfig.toml");
+
+    let raw_config: RawConfig = Config::builder()
+        .add_source(config::File::from_str(config_str, FileFormat::Toml))
+        .build()
+        .unwrap()
+        .try_deserialize()
+        .unwrap();
+    println!("Raw Config:\n{:?}", &raw_config);
+    let app_config = raw_config.into();
+    println!("App Config:\n{:?}", &app_config);
+    app_config
+}
+
 pub static CONFIG: Lazy<AppConfig> = Lazy::new(load_config);

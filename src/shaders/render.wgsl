@@ -1,7 +1,7 @@
 // Vertex Shader
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
-    @location(0) instance_idx: u32
+    @location(0) @interpolate(flat) instance_idx: u32
 };
 
 struct RenderUniform {

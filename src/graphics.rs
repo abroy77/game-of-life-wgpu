@@ -35,7 +35,7 @@ impl GraphicsContext {
         // make a wgpu instance
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             #[cfg(target_arch = "wasm32")]
-            backends: wgpu::Backends::BROWSER_WEBGPU,
+            backends: wgpu::Backends::BROWSER_WEBGPU | wgpu::Backends::GL,
             #[cfg(not(target_arch = "wasm32"))]
             backends: wgpu::Backends::PRIMARY,
             ..Default::default()
@@ -101,12 +101,19 @@ impl GraphicsContext {
         }
     }
 
+    pub fn get_window_size(&self) -> (u32, u32) {
+        let size = self.window.inner_size();
+        (size.width, size.height)
+    }
+
     pub fn resize(&mut self, width: u32, height: u32) {
+        println!("Resize called: {}x{}", width, height);
         if width > 0 && height > 0 {
             self.surface_config.width = width;
             self.surface_config.height = height;
             self.surface.configure(&self.device, &self.surface_config);
             self.is_surface_configured = true;
+            println!("Surface configured successfully");
         }
     }
     pub fn update(&mut self, game_data: &mut GameData) {
@@ -306,6 +313,10 @@ fn setup_window_with_canvas(window_attributes: WindowAttributes) -> WindowAttrib
     // however rust can't be sure. hence we need the unchecked_into()
     // to convert to a HtmlElement
     let canvas = document.get_element_by_id("canvas").unwrap_throw();
+    
+    // Cast to HtmlCanvasElement specifically
+    let html_canvas: wgpu::web_sys::HtmlCanvasElement = canvas.dyn_into().unwrap_throw();
+    
     // attach the canvas to the window attributes for window creation
-    window_attributes.with_canvas(Some(canvas.unchecked_into()))
+    window_attributes.with_canvas(Some(html_canvas))
 }

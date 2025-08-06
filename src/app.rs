@@ -104,27 +104,8 @@ impl ApplicationHandler<AppEvents> for App {
             }
         }
 
-        // set up the game state now that gpu is ready.
-        if self.game_data.is_none() {
-            let device = &self.graphics_context.as_ref().unwrap().device;
-
-            self.game_data = Some(GameData::new(device));
-        }
-        // now that the graphics context is setup we can setup the render_pipeline if it's not there already
-        if self.render_data.is_none() {
-            // setup the render stuff now that the window and surface configurations are made
-
-            let device = &self.graphics_context.as_ref().unwrap().device;
-            let surface_config = &self.graphics_context.as_ref().unwrap().surface_config;
-            self.render_data = Some(
-                RenderData::new(
-                    device,
-                    surface_config,
-                    &GameData::get_render_bind_group_layout(device),
-                )
-                .unwrap(),
-            );
-        }
+        #[cfg(not(target_arch = "wasm32"))]
+        self.setup_gpu_dependencies();
 
         self.next_frame = Instant::now() + CONFIG.frame_duration;
         event_loop.set_control_flow(winit::event_loop::ControlFlow::WaitUntil(self.next_frame));
@@ -138,11 +119,10 @@ impl ApplicationHandler<AppEvents> for App {
             AppEvents::NewGraphicsContext(mut graphics_context) => {
                 #[cfg(target_arch = "wasm32")]
                 {
+                    // On web, manually trigger resize to configure the surface
+                    let (width, height) = graphics_context.get_window_size();
+                    graphics_context.resize(width, height);
                     graphics_context.request_redraw();
-                    // state.resize(
-                    //     state.window.inner_size().width,
-                    //     state.window.inner_size().height,
-                    // );
                 }
                 // no logic needed for the desktop
                 // at this point our app is now setup once it's gotten the window and integrated it
@@ -150,6 +130,7 @@ impl ApplicationHandler<AppEvents> for App {
                 // in web after this I don't think we need the proxy because the async steps of getting the
                 // window  / canvas are done. The app is ready!
                 self.graphics_context = Some(graphics_context);
+                self.setup_gpu_dependencies();
             }
         }
     }
@@ -221,6 +202,30 @@ impl App {
             event_loop.exit()
         }
     }
+    fn setup_gpu_dependencies(&mut self) {
+        // This is run right after window creation on macos.
+        // on wasm it's run by the event loop on receipt of the NewGraphicsContextEvent
+        if self.game_data.is_none() {
+            let device = &self.graphics_context.as_ref().unwrap().device;
+
+            self.game_data = Some(GameData::new(device));
+        }
+        // now that the graphics context is setup we can setup the render_pipeline if it's not there already
+        if self.render_data.is_none() {
+            // setup the render stuff now that the window and surface configurations are made
+
+            let device = &self.graphics_context.as_ref().unwrap().device;
+            let surface_config = &self.graphics_context.as_ref().unwrap().surface_config;
+            self.render_data = Some(
+                RenderData::new(
+                    device,
+                    surface_config,
+                    &GameData::get_render_bind_group_layout(device),
+                )
+                .unwrap(),
+            );
+        }
+    }
 }
 
 pub fn run() -> anyhow::Result<()> {
@@ -237,13 +242,24 @@ pub fn run() -> anyhow::Result<()> {
     let event_loop = EventLoop::<AppEvents>::with_user_event().build()?;
 
     dbg!("making the App");
-    let mut app = App::new(
-        #[cfg(target_arch = "wasm32")]
-        &event_loop,
-    )?;
+    #[cfg(not(target_arch = "wasm32"))]
+    let mut app = App::new()?;
+    #[cfg(target_arch = "wasm32")]
+    let app = App::new(&event_loop)?;
 
     dbg!("running the app");
-    event_loop.run_app(&mut app)?;
+    
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        event_loop.run_app(&mut app)?;
+    }
+    
+    #[cfg(target_arch = "wasm32")]
+    {
+        // On web, run_app doesn't return normally, so we handle it differently
+        use winit::platform::web::EventLoopExtWebSys;
+        event_loop.spawn_app(app);
+    }
 
     Ok(())
 }
@@ -252,6 +268,15 @@ pub fn run() -> anyhow::Result<()> {
 #[wasm_bindgen(start)]
 pub fn run_web() -> Result<(), wasm_bindgen::JsValue> {
     console_error_panic_hook::set_once();
-    run().unwrap_throw();
-    Ok(())
+    
+    match run() {
+        Ok(_) => {
+            log::info!("Game of Life initialized successfully");
+            Ok(())
+        }
+        Err(e) => {
+            log::error!("Failed to initialize Game of Life: {}", e);
+            Err(format!("Initialization error: {}", e).into())
+        }
+    }
 }

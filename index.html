@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Game of Life by Roy</title>
+    <style>
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        background: #fafafa;
+        padding: 10px;
+        box-sizing: border-box;
+      }
+      canvas {
+        border: 1px solid #333;
+        background: #fff;
+        display: block;
+        /* Make canvas responsive */
+        max-width: 90%;
+        max-height: 80%;
+        width: auto;
+        height: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Conway's Game of Life</h1>
+    <canvas id="canvas" width="800" height="600"></canvas>
+    <h3>Implemented in Rust using winit, and wgpu.
+    </h3>
+    <script type="module" src="./index.js"></script>
+  </body>
+</html>
