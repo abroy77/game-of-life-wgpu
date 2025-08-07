@@ -29,7 +29,7 @@ pub const CELL_VERTICES: &[Vertex] = &[
 
 pub fn get_instances() -> Vec<Instance> {
     let mut result = Vec::with_capacity(CONFIG.rows * CONFIG.cols);
-    for row in 0..CONFIG.rows { 
+    for row in 0..CONFIG.rows {
         for col in 0..CONFIG.cols {
             let x = -1.0
                 + CONFIG.gap_size

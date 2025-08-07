@@ -107,7 +107,7 @@ impl GraphicsContext {
     }
 
     pub fn resize(&mut self, width: u32, height: u32) {
-        println!("Resize called: {}x{}", width, height);
+        println!("Resize called: {width}x{height}");
         if width > 0 && height > 0 {
             self.surface_config.width = width;
             self.surface_config.height = height;
@@ -118,9 +118,6 @@ impl GraphicsContext {
     }
     pub fn update(&mut self, game_data: &mut GameData) {
         if !self.is_surface_configured {
-            println!("no surface mate rip");
-            // don't update unless surface is configured
-            return;
         } else {
             let mut encoder = self
                 .device
@@ -199,7 +196,6 @@ impl GraphicsContext {
             // println!("Current Data B: {:?}", cells);
             // drop(data);
             // staging_buffer_b.unmap();
-
 
             game_data.swap_current();
         }
@@ -313,10 +309,10 @@ fn setup_window_with_canvas(window_attributes: WindowAttributes) -> WindowAttrib
     // however rust can't be sure. hence we need the unchecked_into()
     // to convert to a HtmlElement
     let canvas = document.get_element_by_id("canvas").unwrap_throw();
-    
+
     // Cast to HtmlCanvasElement specifically
     let html_canvas: wgpu::web_sys::HtmlCanvasElement = canvas.dyn_into().unwrap_throw();
-    
+
     // attach the canvas to the window attributes for window creation
     window_attributes.with_canvas(Some(html_canvas))
 }

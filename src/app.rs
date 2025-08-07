@@ -248,12 +248,12 @@ pub fn run() -> anyhow::Result<()> {
     let app = App::new(&event_loop)?;
 
     dbg!("running the app");
-    
+
     #[cfg(not(target_arch = "wasm32"))]
     {
         event_loop.run_app(&mut app)?;
     }
-    
+
     #[cfg(target_arch = "wasm32")]
     {
         // On web, run_app doesn't return normally, so we handle it differently
@@ -268,7 +268,7 @@ pub fn run() -> anyhow::Result<()> {
 #[wasm_bindgen(start)]
 pub fn run_web() -> Result<(), wasm_bindgen::JsValue> {
     console_error_panic_hook::set_once();
-    
+
     match run() {
         Ok(_) => {
             log::info!("Game of Life initialized successfully");
