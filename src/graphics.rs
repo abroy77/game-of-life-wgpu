@@ -32,12 +32,21 @@ impl Default for RenderUniform {
 
 impl GraphicsContext {
     pub async fn new(window: Arc<Window>) -> anyhow::Result<Self> {
+        //backend selection
+        let backends = {
+            #[cfg(target_arch = "wasm32")]
+            {
+                // can't use webgl because it does not support compute shaders
+                wgpu::Backends::BROWSER_WEBGPU
+            }
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                wgpu::Backends::PRIMARY
+            }
+        };
         // make a wgpu instance
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
-            #[cfg(target_arch = "wasm32")]
-            backends: wgpu::Backends::BROWSER_WEBGPU | wgpu::Backends::GL,
-            #[cfg(not(target_arch = "wasm32"))]
-            backends: wgpu::Backends::PRIMARY,
+            backends,
             ..Default::default()
         });
 
