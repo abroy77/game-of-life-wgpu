@@ -65,6 +65,7 @@ jobs:
       
     - name: Build WASM package
       run: |
+        chmod +x ./wasm_build.sh
         ./wasm_build.sh
         
     - name: Setup Pages
