@@ -47,7 +47,6 @@ jobs:
         run: cargo clippy -- -D warnings
 
   build:
-    needs: [fmt,clippy]
     runs-on: ubuntu-latest
     steps:
     - name: Checkout repository
@@ -66,7 +65,7 @@ jobs:
       
     - name: Build WASM package
       run: |
-        wasm-pack build --target web --out-dir pkg --release
+        ./wasm_build.sh
         
     - name: Setup Pages
       uses: actions/configure-pages@v4
