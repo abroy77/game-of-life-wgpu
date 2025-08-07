@@ -6,6 +6,13 @@ edition = "2024"
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+# [profile.release]
+# lto = true
+# opt-level = "s"
+
+# [package.metadata.wasm-pack.profile.release]
+# wasm-opt = ["-Os"]
+
 [dependencies]
 anyhow = "1.0.98"
 bytemuck = { version = "1.23.1", features = ["derive"] }
@@ -16,7 +23,7 @@ once_cell = "1.21.3"
 pollster = "0.4.0"
 rand = "0.9.1"
 serde = { version = "1.0.219", features = ["derive"] }
-wgpu = "26.0.1"
+wgpu = { version = "26.0.1", features = ["webgl"] }
 winit = { version = "0.30.11", features = ["android-native-activity"] }
 
 [target.'cfg(target_arch="wasm32")'.dependencies]
