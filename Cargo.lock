@@ -2471,7 +2471,6 @@ dependencies = [
  "thiserror 2.0.12",
  "wgpu-core-deps-apple",
  "wgpu-core-deps-emscripten",
- "wgpu-core-deps-wasm",
  "wgpu-core-deps-windows-linux-android",
  "wgpu-hal",
  "wgpu-types",
@@ -2496,15 +2495,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "wgpu-core-deps-wasm"
-version = "26.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c03b9f9e1a50686d315fc6debe4980cc45cd37b0e919351917df494e8fdc8885"
-dependencies = [
- "wgpu-hal",
-]
-
-[[package]]
 name = "wgpu-core-deps-windows-linux-android"
 version = "26.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2515,9 +2505,9 @@ dependencies = [
 
 [[package]]
 name = "wgpu-hal"
-version = "26.0.3"
+version = "26.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5981b1b884e1d0166cb02af818d0d5e0448b5754eb77bb5a28d8f8fb94c95f9f"
+checksum = "7df2c64ac282a91ad7662c90bc4a77d4a2135bc0b2a2da5a4d4e267afc034b9e"
 dependencies = [
  "android_system_properties",
  "arrayvec",
