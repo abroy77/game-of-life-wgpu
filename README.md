@@ -3,7 +3,7 @@
 A high-performance implementation of Conway's Game of Life. The simulation and rendering runs entirely on your GPU.
 No graphics libraries were used in this app. It's all running in WASM locally on your browser in the static web-app.
 
-## [Live Demo](https://abroy77.github.io/game-of-life)
+## [Live Demo: Click Here!](https://abroy77.github.io/game-of-life-wgpu/)
 
 The Game of Life follows simple rules:
 
