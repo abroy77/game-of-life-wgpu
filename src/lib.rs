@@ -4,3 +4,5 @@ pub mod game_data;
 pub mod graphics;
 pub mod render_data;
 pub mod vertex;
+#[cfg(target_arch = "wasm32")]
+pub mod web_controls;

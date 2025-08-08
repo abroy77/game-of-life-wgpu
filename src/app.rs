@@ -1,7 +1,5 @@
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
-#[cfg(target_arch = "wasm32")]
-use web_time::Instant;
 
 use crate::{
     config::{AppConfig, load_config},
@@ -9,9 +7,6 @@ use crate::{
     graphics::{self, GraphicsContext},
     render_data::RenderData,
 };
-
-#[cfg(target_arch = "wasm32")]
-use wasm_bindgen::prelude::*;
 
 use winit::{
     application::ApplicationHandler,
@@ -21,12 +16,23 @@ use winit::{
 };
 
 #[cfg(target_arch = "wasm32")]
-use winit::event_loop::EventLoopProxy;
+use {
+    std::sync::Mutex, wasm_bindgen::prelude::*, web_time::Instant,
+    winit::event_loop::EventLoopProxy,
+};
 
 pub enum AppEvents {
     NewGraphicsContext(GraphicsContext),
     PlayPause,
 }
+
+// use std::sync::Mutex;
+// use winit::event_loop::EventLoopProxy;
+
+// This thread local will allow us to send events from our JS functions to control
+// the state of the app
+#[cfg(target_arch = "wasm32")]
+thread_local! {pub static EVENT_LOOP_PROXY: Mutex<Option<EventLoopProxy<AppEvents>>> = Mutex::new(None);}
 
 pub struct App {
     // EventLoopProxy allows for Async code which is needed on the web so the
@@ -246,21 +252,17 @@ pub fn run() -> anyhow::Result<()> {
     // re-emphasising that the 'event' is our state. we're calling a change to our state the event in the loop
     let event_loop = EventLoop::<AppEvents>::with_user_event().build()?;
 
-    dbg!("making the App");
-    #[cfg(not(target_arch = "wasm32"))]
-    let mut app = App::new()?;
-    #[cfg(target_arch = "wasm32")]
-    let app = App::new(&event_loop)?;
-
-    dbg!("running the app");
-
     #[cfg(not(target_arch = "wasm32"))]
     {
+        let mut app = App::new()?;
         event_loop.run_app(&mut app)?;
     }
 
     #[cfg(target_arch = "wasm32")]
     {
+        let proxy = event_loop.create_proxy();
+        EVENT_LOOP_PROXY.with(|p| *p.lock().unwrap() = Some(proxy));
+        let app = App::new(&event_loop)?;
         // On web, run_app doesn't return normally, so we handle it differently
         use winit::platform::web::EventLoopExtWebSys;
         event_loop.spawn_app(app);
