@@ -25,6 +25,7 @@ use winit::event_loop::EventLoopProxy;
 
 pub enum AppEvents {
     NewGraphicsContext(GraphicsContext),
+    PlayPause,
 }
 
 pub struct App {
@@ -60,11 +61,9 @@ impl App {
         })
     }
 
-    // pub fn update_state(&mut self) {
-    //     if let Some(game_data) = self.game_data.as_mut() {
-    //         game_data.update();
-    //     }
-    // }
+    fn play_pause(&mut self) {
+        self.config.is_paused = !self.config.is_paused;
+    }
 }
 
 impl ApplicationHandler<AppEvents> for App {
@@ -110,7 +109,7 @@ impl ApplicationHandler<AppEvents> for App {
         event_loop.set_control_flow(winit::event_loop::ControlFlow::WaitUntil(self.next_frame));
     }
     #[allow(unused_mut)]
-    fn user_event(&mut self, _event_loop: &winit::event_loop::ActiveEventLoop, event: AppEvents) {
+    fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: AppEvents) {
         // This is where we handle events in the proxy.
         // 'event' is state because of how we've parameterised the App.
         // This is where the proxy.send_event() ends up
@@ -131,6 +130,7 @@ impl ApplicationHandler<AppEvents> for App {
                 self.graphics_context = Some(graphics_context);
                 self.setup_gpu_dependencies();
             }
+            AppEvents::PlayPause => self.play_pause(),
         }
     }
     fn window_event(
@@ -187,19 +187,23 @@ impl ApplicationHandler<AppEvents> for App {
     }
     fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
         let now = Instant::now();
-        if now >= self.next_frame {
+        if now >= self.next_frame && !self.config.is_paused {
+            // if we're ready for next frame and not paused then we update and send redraw command
             if let Some(gc) = &mut self.graphics_context {
+                gc.update(self.game_data.as_mut().unwrap(), &self.config);
                 gc.request_redraw();
             }
-            self.next_frame += self.config.frame_duration;
+            self.next_frame = now + self.config.frame_duration;
         }
     }
 }
 
 impl App {
-    fn handle_key(&self, event_loop: &ActiveEventLoop, code: KeyCode, is_pressed: bool) {
-        if let (KeyCode::Escape, true) = (code, is_pressed) {
-            event_loop.exit()
+    fn handle_key(&mut self, event_loop: &ActiveEventLoop, code: KeyCode, is_pressed: bool) {
+        match (code, is_pressed) {
+            (KeyCode::Escape, true) => event_loop.exit(),
+            (KeyCode::Space, true) => self.play_pause(),
+            (_, _) => (),
         }
     }
     fn setup_gpu_dependencies(&mut self) {

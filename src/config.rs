@@ -4,7 +4,6 @@ use std::time::Duration;
 use web_time::Duration;
 
 use config::Config;
-use once_cell::sync::Lazy;
 use serde::Deserialize;
 
 const COMPUTE_WORKGROUP_SIZE: [usize; 2] = [16, 16];
@@ -31,6 +30,7 @@ pub struct AppConfig {
     pub frame_duration: Duration,
     pub window_size: Option<(usize, usize)>,
     pub compute_dispatches: [usize; 2],
+    pub is_paused: bool,
 }
 
 impl From<RawConfig> for AppConfig {
@@ -59,6 +59,7 @@ impl From<RawConfig> for AppConfig {
             gap_size,
             compute_dispatches,
             window_size: value.window_size,
+            is_paused: false,
         }
     }
 }
@@ -94,5 +95,3 @@ pub fn load_config() -> AppConfig {
     println!("App Config:\n{:?}", &app_config);
     app_config
 }
-
-// pub static CONFIG: Lazy<AppConfig> = Lazy::new(load_config);
