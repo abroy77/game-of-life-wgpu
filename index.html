@@ -36,13 +36,15 @@
   <body>
     <h1>Conway's Game of Life</h1>
     <canvas id="canvas" width="800" height="600"></canvas>
-    <h3>Implemented in Rust using winit, and wgpu.
-    </h3>
+    <h3>Implemented in Rust using winit, and wgpu.</h3>
+    <p>Conway's game of life is a 2D cellular automata where at each iteration a set of rules decides whether a cell lives / dies / stays alive.
+    <a href = "https://en.wikipedia.org/wiki/Conway%27s_Game_of_Life">Explanation</a>
+    </p>
     <h4>Troubleshooting:</h4>
     <p> Requires WebGPU to be enabled. You may need to install the latest version of chrome / safari / firefox to view this.
     </p>
-    <h4>Warning:</h4>
-    <p>Does not work on iOS because wgpu is not fully supported yet</p>
+    <h4>iOS:</h4>
+    <p>Go to Safari > Settings > enable webgpu > True. This should allow the simulation to run </p>
     <script type="module" src="./index.js"></script>
   </body>
 </html>
