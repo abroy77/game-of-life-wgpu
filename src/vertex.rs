@@ -1,5 +1,3 @@
-use crate::config::CONFIG;
-
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 
@@ -27,18 +25,12 @@ pub const CELL_VERTICES: &[Vertex] = &[
     },
 ];
 
-pub fn get_instances() -> Vec<Instance> {
-    let mut result = Vec::with_capacity(CONFIG.rows * CONFIG.cols);
-    for row in 0..CONFIG.rows {
-        for col in 0..CONFIG.cols {
-            let x = -1.0
-                + CONFIG.gap_size
-                + CONFIG.cell_size / 2.0
-                + col as f32 * (CONFIG.cell_size + CONFIG.gap_size);
-            let y = -1.0
-                + CONFIG.gap_size
-                + CONFIG.cell_size / 2.0
-                + row as f32 * (CONFIG.cell_size + CONFIG.gap_size);
+pub fn get_instances(rows: usize, cols: usize, gap_size: f32, cell_size: f32) -> Vec<Instance> {
+    let mut result = Vec::with_capacity(rows * cols);
+    for row in 0..rows {
+        for col in 0..cols {
+            let x = -1.0 + gap_size + cell_size / 2.0 + col as f32 * (cell_size + gap_size);
+            let y = -1.0 + gap_size + cell_size / 2.0 + row as f32 * (cell_size + gap_size);
 
             result.push(Instance { position: [x, y] });
         }

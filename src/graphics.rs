@@ -1,4 +1,4 @@
-use crate::{config::CONFIG, game_data::GameData, render_data::RenderData, vertex::INDICES};
+use crate::{config::AppConfig, game_data::GameData, render_data::RenderData, vertex::INDICES};
 use std::sync::Arc;
 #[cfg(target_arch = "wasm32")]
 use winit::window::WindowAttributes;
@@ -20,10 +20,10 @@ pub struct RenderUniform {
     pub _pad_more: [f32; 4],
 }
 
-impl Default for RenderUniform {
-    fn default() -> Self {
+impl RenderUniform {
+    pub fn new(cell_size: f32) -> Self {
         Self {
-            cell_size: CONFIG.cell_size,
+            cell_size,
             _pad: [0.0; 3],
             _pad_more: [0.0; 4],
         }
@@ -125,7 +125,7 @@ impl GraphicsContext {
             println!("Surface configured successfully");
         }
     }
-    pub fn update(&mut self, game_data: &mut GameData) {
+    pub fn update(&mut self, game_data: &mut GameData, config: &AppConfig) {
         if !self.is_surface_configured {
         } else {
             let mut encoder = self
@@ -144,14 +144,14 @@ impl GraphicsContext {
                 compute_pass.set_bind_group(0, &game_data.compute_uniform_bind_group, &[]);
                 compute_pass.set_bind_group(1, game_data.get_current_compute_bind_group(), &[]);
                 compute_pass.dispatch_workgroups(
-                    CONFIG.compute_dispatches[0] as u32,
-                    CONFIG.compute_dispatches[1] as u32,
+                    config.compute_dispatches[0] as u32,
+                    config.compute_dispatches[1] as u32,
                     1,
                 );
             } // using std::iter::once to make a simple iterable that yields
             // a single item. This means I don't need to make a vec or array.
             // let buffer_size =
-            //     (CONFIG.num_elements * std::mem::size_of::<u32>()) as wgpu::BufferAddress;
+            //     (config.num_elements * std::mem::size_of::<u32>()) as wgpu::BufferAddress;
             // let staging_buffer_a = self.device.create_buffer(&wgpu::BufferDescriptor {
             //     label: Some("Staging Buffer A"),
             //     size: buffer_size,
@@ -214,6 +214,7 @@ impl GraphicsContext {
         &mut self,
         render_data: &RenderData,
         game_state_bind_group: &wgpu::BindGroup,
+        config: &AppConfig,
     ) -> Result<(), wgpu::SurfaceError> {
         if !self.is_surface_configured {
             // don't render unless surface is configured
@@ -276,7 +277,7 @@ impl GraphicsContext {
                 // draw calls.
                 // Our current state_buffer in the game_state_bind group will control which
                 // cells are shown as alive.
-                render_pass.draw_indexed(0..INDICES.len() as u32, 0, 0..CONFIG.num_elements as u32);
+                render_pass.draw_indexed(0..INDICES.len() as u32, 0, 0..config.num_elements as u32);
             } // using std::iter::once to make a simple iterable that yields
             // a single item. This means I don't need to make a vec or array.
             self.queue.submit(std::iter::once(encoder.finish()));

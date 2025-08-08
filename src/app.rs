@@ -4,7 +4,7 @@ use std::time::Instant;
 use web_time::Instant;
 
 use crate::{
-    config::CONFIG,
+    config::{AppConfig, load_config},
     game_data::GameData,
     graphics::{self, GraphicsContext},
     render_data::RenderData,
@@ -36,21 +36,19 @@ pub struct App {
     render_data: Option<RenderData>,
     game_data: Option<GameData>,
     next_frame: Instant,
+    config: AppConfig,
 }
 
 impl App {
     pub fn new(
         #[cfg(target_arch = "wasm32")] event_loop: &EventLoop<AppEvents>,
     ) -> anyhow::Result<Self> {
-        dbg!("getting proxy");
         #[cfg(target_arch = "wasm32")]
         let proxy = Some(event_loop.create_proxy());
+        let config = load_config();
 
-        dbg!("pre frame");
-        let next_frame = Instant::now() + CONFIG.frame_duration;
-        dbg!("post frame");
+        let next_frame = Instant::now() + config.frame_duration;
 
-        dbg!("returning App");
         Ok(Self {
             #[cfg(target_arch = "wasm32")]
             proxy,
@@ -58,6 +56,7 @@ impl App {
             render_data: None,
             game_data: None,
             next_frame,
+            config,
         })
     }
 
@@ -107,7 +106,7 @@ impl ApplicationHandler<AppEvents> for App {
         #[cfg(not(target_arch = "wasm32"))]
         self.setup_gpu_dependencies();
 
-        self.next_frame = Instant::now() + CONFIG.frame_duration;
+        self.next_frame = Instant::now() + self.config.frame_duration;
         event_loop.set_control_flow(winit::event_loop::ControlFlow::WaitUntil(self.next_frame));
     }
     #[allow(unused_mut)]
@@ -159,6 +158,7 @@ impl ApplicationHandler<AppEvents> for App {
                         .as_ref()
                         .unwrap()
                         .get_current_render_bind_group(),
+                    &self.config,
                 ) {
                     Ok(_) => {}
                     Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
@@ -170,8 +170,8 @@ impl ApplicationHandler<AppEvents> for App {
                     }
                 }
                 // graphics_context.update(self.render_data.as_mut().unwrap());
-                graphics_context.update(self.game_data.as_mut().unwrap());
-                self.next_frame = Instant::now() + CONFIG.frame_duration;
+                graphics_context.update(self.game_data.as_mut().unwrap(), &self.config);
+                self.next_frame = Instant::now() + self.config.frame_duration;
             }
             WindowEvent::KeyboardInput {
                 event:
@@ -191,7 +191,7 @@ impl ApplicationHandler<AppEvents> for App {
             if let Some(gc) = &mut self.graphics_context {
                 gc.request_redraw();
             }
-            self.next_frame += CONFIG.frame_duration;
+            self.next_frame += self.config.frame_duration;
         }
     }
 }
@@ -208,7 +208,7 @@ impl App {
         if self.game_data.is_none() {
             let device = &self.graphics_context.as_ref().unwrap().device;
 
-            self.game_data = Some(GameData::new(device));
+            self.game_data = Some(GameData::new(device, &self.config));
         }
         // now that the graphics context is setup we can setup the render_pipeline if it's not there already
         if self.render_data.is_none() {
@@ -221,6 +221,7 @@ impl App {
                     device,
                     surface_config,
                     &GameData::get_render_bind_group_layout(device),
+                    &self.config,
                 )
                 .unwrap(),
             );

@@ -1,7 +1,7 @@
-// use crate::config::CONFIG;
 use wgpu::{BufferUsages, util::DeviceExt};
 
 use crate::{
+    config::AppConfig,
     graphics::RenderUniform,
     vertex::{CELL_VERTICES, INDICES, Instance, Vertex, get_instances},
 };
@@ -21,6 +21,7 @@ impl RenderData {
         device: &wgpu::Device,
         surface_config: &wgpu::SurfaceConfiguration,
         game_state_render_bind_group_layout: &wgpu::BindGroupLayout,
+        config: &AppConfig,
     ) -> anyhow::Result<Self> {
         // so we need to set up our buffers,
         // then our bind group layout
@@ -40,7 +41,7 @@ impl RenderData {
             usage: BufferUsages::INDEX,
         });
 
-        let instances = get_instances();
+        let instances = get_instances(config.rows, config.cols, config.gap_size, config.cell_size);
 
         let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Instance Buffer"),
@@ -48,7 +49,7 @@ impl RenderData {
             usage: wgpu::BufferUsages::VERTEX,
         });
 
-        let uniform = RenderUniform::default();
+        let uniform = RenderUniform::new(config.cell_size);
         let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Render Uniform Buffer"),
             contents: bytemuck::bytes_of(&uniform),

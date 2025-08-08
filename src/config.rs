@@ -95,4 +95,4 @@ pub fn load_config() -> AppConfig {
     app_config
 }
 
-pub static CONFIG: Lazy<AppConfig> = Lazy::new(load_config);
+// pub static CONFIG: Lazy<AppConfig> = Lazy::new(load_config);

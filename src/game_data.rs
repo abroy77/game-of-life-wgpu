@@ -1,6 +1,8 @@
-use crate::config::CONFIG;
+// use crate::config::CONFIG;
 use rand::{Rng, rng, rngs::ThreadRng};
 use wgpu::util::DeviceExt;
+
+use crate::config::AppConfig;
 
 pub struct GameData {
     // rng: ThreadRng,
@@ -24,24 +26,28 @@ pub struct ComputeUniform {
     _pad: [u32; 2],
 }
 
-impl Default for ComputeUniform {
-    fn default() -> Self {
+impl ComputeUniform {
+    pub fn new(rows: u32, cols: u32) -> Self {
         Self {
-            rows: CONFIG.rows as u32,
-            cols: CONFIG.cols as u32,
+            rows,
+            cols,
             _pad: [0; 2],
         }
     }
 }
 
 impl GameData {
-    pub fn new(device: &wgpu::Device) -> Self {
+    pub fn new(device: &wgpu::Device, config: &AppConfig) -> Self {
         let mut rng = rng();
-        let state = (0..CONFIG.num_elements)
+        let state = (0..config.num_elements)
             .map(|_| rng.random_bool(0.7) as u32)
             .collect();
 
-        let current_state = random_state(&mut rng);
+        let current_state = random_state(
+            &mut rng,
+            config.num_elements as u32,
+            config.init_rand_threshold,
+        );
         let next_state = current_state.clone();
 
         let game_state_buffer_a = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -59,7 +65,7 @@ impl GameData {
                 | wgpu::BufferUsages::COPY_SRC,
         });
 
-        let compute_uniform = ComputeUniform::default();
+        let compute_uniform = ComputeUniform::new(config.rows as u32, config.cols as u32);
         let compute_uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: None,
             contents: bytemuck::bytes_of(&compute_uniform),
@@ -244,8 +250,8 @@ impl GameData {
     }
 }
 
-fn random_state(rng: &mut ThreadRng) -> Vec<u32> {
-    (0..CONFIG.num_elements)
-        .map(|_| rng.random_bool(CONFIG.init_rand_threshold) as u32)
+fn random_state(rng: &mut ThreadRng, num_elements: u32, init_rand_threshold: f64) -> Vec<u32> {
+    (0..num_elements)
+        .map(|_| rng.random_bool(init_rand_threshold) as u32)
         .collect()
 }
