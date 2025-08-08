@@ -3,58 +3,115 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Game of Life by Roy</title>
+    <title>Game of Life: WGPU</title>
     <style>
-      html,
-      body {
-        height: 100%;
+      * {
         margin: 0;
         padding: 0;
-      }
-      body {
-        height: 100vh;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        background: #fafafa;
-        padding: 10px;
         box-sizing: border-box;
       }
+
+      body {
+        font-family: system-ui, sans-serif;
+        background: #fafafa;
+        padding: 20px;
+        min-height: 100vh;
+      }
+
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        display: grid;
+        gap: 20px;
+        grid-template-columns: 1fr;
+      }
+
+      h1 {
+        text-align: center;
+        font-size: clamp(1.5rem, 5vw, 2.5rem);
+      }
+
       canvas {
-        border: 1px solid #333;
-        background: #fff;
+        width: 100%;
+        max-width: 800px;
+        height: 60vh;
+        border: 2px solid #333;
+        background: white;
+        margin: 0 auto;
         display: block;
-        /* Make canvas responsive */
-        max-width: 90%;
-        max-height: 80%;
-        width: auto;
-        height: auto;
+      }
+
+      button {
+        padding: 12px 24px;
+        font-size: 16px;
+        border: 2px solid #333;
+        background: white;
+        cursor: pointer;
+        margin: 10px auto;
+        display: block;
+      }
+
+      .info {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        line-height: 1.6;
+      }
+
+      /* Desktop: side-by-side layout */
+      @media (min-width: 768px) {
+        .container {
+          grid-template-columns: 2fr 1fr;
+          align-items: start;
+        }
+
+        .main {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+        }
+
+        canvas {
+          width: 100%;
+          height: 70vh;
+        }
       }
     </style>
   </head>
   <body>
-    <h1>Conway's Game of Life</h1>
-    <canvas id="canvas" width="800" height="600"></canvas>
-    <button id="playPause" onclick="window.playPause()">Play / Pause</button>
-    <h3>Implemented in Rust using winit, and wgpu.</h3>
-    <p>
-      Conway's game of life is a 2D cellular automata where at each iteration a
-      set of rules decides whether a cell lives / dies / stays alive.
-      <a href="https://en.wikipedia.org/wiki/Conway%27s_Game_of_Life"
-        >Explanation</a
-      >
-    </p>
-    <h4>Troubleshooting:</h4>
-    <p>
-      Requires WebGPU to be enabled. You may need to install the latest version
-      of chrome / safari / firefox to view this.
-    </p>
-    <h4>iOS:</h4>
-    <p>
-      Go to Safari > Settings > enable webgpu > True. This should allow the
-      simulation to run
-    </p>
+    <div class="container">
+      <div class="main">
+        <h1>Conway's Game of Life</h1>
+        <canvas id="canvas"></canvas>
+        <button id="playPause" onclick="window.playPause()">
+          Play / Pause
+        </button>
+      </div>
+
+      <div class="info">
+        <h3>Implemented in Rust using winit, and wgpu.</h3>
+        <p>
+          Conway's game of life is a 2D cellular automata where at each
+          iteration a set of rules decides whether a cell lives / dies / stays
+          alive.
+          <a href="https://en.wikipedia.org/wiki/Conway%27s_Game_of_Life"
+            >Explanation</a
+          >
+        </p>
+
+        <h4>Troubleshooting:</h4>
+        <p>
+          Requires WebGPU to be enabled. You may need to install the latest
+          version of chrome / safari / firefox to view this.
+        </p>
+
+        <h4>iOS:</h4>
+        <p>
+          Go to Safari > Settings > enable webgpu > True. This should allow the
+          simulation to run.
+        </p>
+      </div>
+    </div>
     <script type="module" src="./index.js"></script>
   </body>
 </html>
