@@ -24,6 +24,11 @@ use {
 pub enum AppEvents {
     NewGraphicsContext(GraphicsContext),
     PlayPause,
+    UpdateFps(usize),
+    RandomiseState,
+    StepForward,
+    UpdateRows(usize),
+    UpdateCols(usize),
 }
 
 // use std::sync::Mutex;
@@ -137,6 +142,7 @@ impl ApplicationHandler<AppEvents> for App {
                 self.setup_gpu_dependencies();
             }
             AppEvents::PlayPause => self.play_pause(),
+            _ => todo!(),
         }
     }
     fn window_event(

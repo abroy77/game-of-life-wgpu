@@ -151,7 +151,7 @@ impl GraphicsContext {
             } // using std::iter::once to make a simple iterable that yields
             // a single item. This means I don't need to make a vec or array.
             // let buffer_size =
-            //     (config.num_elements * std::mem::size_of::<u32>()) as wgpu::BufferAddress;
+            //     (config.num_elements() * std::mem::size_of::<u32>()) as wgpu::BufferAddress;
             // let staging_buffer_a = self.device.create_buffer(&wgpu::BufferDescriptor {
             //     label: Some("Staging Buffer A"),
             //     size: buffer_size,
@@ -277,7 +277,11 @@ impl GraphicsContext {
                 // draw calls.
                 // Our current state_buffer in the game_state_bind group will control which
                 // cells are shown as alive.
-                render_pass.draw_indexed(0..INDICES.len() as u32, 0, 0..config.num_elements as u32);
+                render_pass.draw_indexed(
+                    0..INDICES.len() as u32,
+                    0,
+                    0..config.num_elements() as u32,
+                );
             } // using std::iter::once to make a simple iterable that yields
             // a single item. This means I don't need to make a vec or array.
             self.queue.submit(std::iter::once(encoder.finish()));

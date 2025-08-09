@@ -22,7 +22,6 @@ pub struct RawConfig {
 pub struct AppConfig {
     pub rows: usize,
     pub cols: usize,
-    pub num_elements: usize,
     pub cell_size: f32,
     pub gap_size: f32,
     pub fps: usize,
@@ -51,7 +50,6 @@ impl From<RawConfig> for AppConfig {
         Self {
             rows: value.rows,
             cols: value.cols,
-            num_elements: value.rows * value.cols,
             cell_size,
             fps: value.fps,
             init_rand_threshold: value.init_rand_threshold,
@@ -61,6 +59,11 @@ impl From<RawConfig> for AppConfig {
             window_size: value.window_size,
             is_paused: false,
         }
+    }
+}
+impl AppConfig {
+    pub fn num_elements(&self) -> usize {
+        self.rows * self.cols
     }
 }
 
