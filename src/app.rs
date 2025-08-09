@@ -1,6 +1,3 @@
-#[cfg(not(target_arch = "wasm32"))]
-use std::time::Instant;
-
 use crate::{
     config::{AppConfig, load_config},
     game_data::GameData,
@@ -15,9 +12,14 @@ use winit::{
     keyboard::{KeyCode, PhysicalKey},
 };
 
+#[cfg(not(target_arch = "wasm32"))]
+use std::time::{Duration, Instant};
+
 #[cfg(target_arch = "wasm32")]
 use {
-    std::sync::Mutex, wasm_bindgen::prelude::*, web_time::Instant,
+    std::sync::Mutex,
+    wasm_bindgen::prelude::*,
+    web_time::{Duration, Instant},
     winit::event_loop::EventLoopProxy,
 };
 
@@ -74,6 +76,23 @@ impl App {
 
     fn play_pause(&mut self) {
         self.config.is_paused = !self.config.is_paused;
+    }
+    fn update_fps(&mut self, new_fps: usize) {
+        // set limits on fps to be within 0 and 60. clip the values at those limits
+        self.config.frame_duration = Duration::from_secs(new_fps.clamp(1, 60) as u64)
+    }
+
+    fn step_forward(&mut self) {
+        // need to check if we're paused, and if so, run a single compute update
+        // and render pass
+        if self.config.is_paused {
+            if let Some(gc) = &mut self.graphics_context {
+                if let Some(game_data) = &mut self.game_data {
+                    gc.update(game_data, &self.config);
+                    gc.request_redraw();
+                }
+            }
+        }
     }
 }
 
@@ -142,6 +161,8 @@ impl ApplicationHandler<AppEvents> for App {
                 self.setup_gpu_dependencies();
             }
             AppEvents::PlayPause => self.play_pause(),
+            AppEvents::UpdateFps(new_fps) => self.update_fps(new_fps),
+            AppEvents::StepForward => self.step_forward(),
             _ => todo!(),
         }
     }
@@ -215,6 +236,7 @@ impl App {
         match (code, is_pressed) {
             (KeyCode::Escape, true) => event_loop.exit(),
             (KeyCode::Space, true) => self.play_pause(),
+            (KeyCode::ArrowRight, true) => self.step_forward(),
             (_, _) => (),
         }
     }

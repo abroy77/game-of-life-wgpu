@@ -1,4 +1,4 @@
-import init, {playPause} from "./pkg/game_of_life.js";
+import init, {playPause, stepForward} from "./pkg/game_of_life.js";
 
 async function run() {
   try {
@@ -15,6 +15,7 @@ async function run() {
   // now we setup our helper functions
   // give them the window scope: 
   window.playPause= playPause;
+  window.stepForward = stepForward;
   
 }
 

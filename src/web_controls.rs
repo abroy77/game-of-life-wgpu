@@ -15,3 +15,14 @@ pub fn play_pause() {
         }
     })
 }
+
+#[wasm_bindgen(js_name = "stepForward")]
+pub fn step_forward() {
+    EVENT_LOOP_PROXY.with(|proxy| {
+        if let Ok(guard) = proxy.lock() {
+            if let Some(proxy) = &*guard {
+                let _ = proxy.send_event(AppEvents::StepForward);
+            }
+        }
+    })
+}
