@@ -114,15 +114,13 @@ impl App {
     }
 
     fn step_forward(&mut self) {
-        // need to check if we're paused, and if so, run a single compute update
-        // and render pass
-        if self.config.is_paused {
-            if let Some(gc) = &mut self.graphics_context {
-                if let Some(game_data) = &mut self.game_data {
-                    gc.update(game_data, &self.config);
-                    gc.request_redraw();
-                }
-            }
+        // auto-pause
+        if !self.config.is_paused {
+            self.config.is_paused = true;
+        }
+        if let (Some(gc), Some(game_data)) = (&mut self.graphics_context, &mut self.game_data) {
+            gc.update(game_data, &self.config);
+            gc.request_redraw();
         }
     }
 
@@ -252,8 +250,8 @@ impl ApplicationHandler<AppEvents> for App {
         let now = Instant::now();
         if now >= self.next_frame && !self.config.is_paused {
             // if we're ready for next frame and not paused then we update and send redraw command
-            if let Some(gc) = &mut self.graphics_context {
-                gc.update(self.game_data.as_mut().unwrap(), &self.config);
+            if let (Some(gc), Some(game_data)) = (&mut self.graphics_context, &mut self.game_data) {
+                gc.update(game_data, &self.config);
                 gc.request_redraw();
             }
             self.next_frame = now + self.config.frame_duration;
