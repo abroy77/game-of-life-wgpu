@@ -203,8 +203,6 @@ impl ApplicationHandler<AppEvents> for App {
                     }
                 }
                 // graphics_context.update(self.render_data.as_mut().unwrap());
-                graphics_context.update(self.game_data.as_mut().unwrap(), &self.config);
-                self.next_frame = Instant::now() + self.config.frame_duration;
             }
             WindowEvent::KeyboardInput {
                 event:
