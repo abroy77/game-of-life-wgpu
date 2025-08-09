@@ -218,7 +218,7 @@ impl GameData {
             }],
         })
     }
-    pub fn update_grid_state(&self, new_state: &Vec<u32>, queue: &wgpu::Queue) {
+    pub fn update_grid_state(&self, new_state: &[u32], queue: &wgpu::Queue) {
         queue.write_buffer(
             &self.game_state_buffer_a,
             0,

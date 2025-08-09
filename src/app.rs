@@ -16,7 +16,13 @@ use winit::{
 };
 
 #[cfg(not(target_arch = "wasm32"))]
-use std::time::{Duration, Instant};
+use {
+    std::{
+        iter::repeat_n,
+        time::{Duration, Instant},
+    },
+    winit::window::CustomCursor,
+};
 
 #[cfg(target_arch = "wasm32")]
 use {
@@ -163,7 +169,7 @@ impl ApplicationHandler<AppEvents> for App {
         // This differs on web and desktop so we need two variants of this.
         self.setup_graphics_context(window);
 
-        #[cfg(not(target_arch = "wasm32"))]
+        // we fill do these things after we have window size on web
         self.setup_game_and_render_data();
 
         self.next_frame = Instant::now() + self.config.frame_duration;
@@ -214,7 +220,10 @@ impl ApplicationHandler<AppEvents> for App {
                 event_loop.exit();
             }
             WindowEvent::Resized(size) => {
+                info!("about to resize");
                 graphics_context.resize(size.width, size.height);
+                #[cfg(not(target_arch = "wasm32"))]
+                self.reset_cursor(event_loop);
             }
             WindowEvent::RedrawRequested => {
                 match graphics_context.render(
@@ -288,6 +297,36 @@ impl App {
                 )
                 .unwrap(),
             );
+        }
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    fn reset_cursor(&mut self, event_loop: &ActiveEventLoop) {
+        if let Some(graphics_context) = &self.graphics_context {
+            let (window_width, window_height) = graphics_context.get_window_size();
+            let scale_factor = graphics_context.window.scale_factor() as f32;
+            let (window_width, window_height) = (
+                window_width as f32 / scale_factor,
+                window_height as f32 / scale_factor,
+            );
+            let cursor_width = ((window_width * self.config.cell_size) / 2.0) as u16;
+            let cursor_height = ((window_height * self.config.cell_size) / 2.0) as u16;
+
+            let rgba_buffer: Vec<u8> = repeat_n(
+                self.config.cursor_color,
+                (cursor_width * cursor_height) as usize,
+            )
+            .flatten()
+            .collect();
+            let custom_cursor_source = CustomCursor::from_rgba(
+                rgba_buffer,
+                cursor_width,
+                cursor_height,
+                cursor_width / 2,
+                cursor_height / 2,
+            )
+            .unwrap();
+            let custom_cursor = event_loop.create_custom_cursor(custom_cursor_source);
+            graphics_context.window.set_cursor(custom_cursor);
         }
     }
 }

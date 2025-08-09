@@ -10,7 +10,7 @@ pub struct GraphicsContext {
     pub queue: wgpu::Queue,
     pub surface_config: wgpu::SurfaceConfiguration,
     pub is_surface_configured: bool,
-    window: Arc<Window>,
+    pub window: Arc<Window>,
 }
 #[repr(C, align(16))]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]

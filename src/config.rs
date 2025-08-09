@@ -16,6 +16,8 @@ pub struct RawConfig {
     pub fps: usize,
     pub init_rand_threshold: f64,
     pub window_size: Option<(usize, usize)>,
+    pub background_color: [u8; 4],
+    pub cursor_color: [u8; 4],
 }
 
 #[derive(Debug)]
@@ -30,6 +32,8 @@ pub struct AppConfig {
     pub window_size: Option<(usize, usize)>,
     pub compute_dispatches: [usize; 2],
     pub is_paused: bool,
+    pub background_color: [u8; 4],
+    pub cursor_color: [u8; 4],
 }
 
 impl From<RawConfig> for AppConfig {
@@ -58,6 +62,8 @@ impl From<RawConfig> for AppConfig {
             compute_dispatches,
             window_size: value.window_size,
             is_paused: false,
+            background_color: value.background_color,
+            cursor_color: value.cursor_color,
         }
     }
 }
