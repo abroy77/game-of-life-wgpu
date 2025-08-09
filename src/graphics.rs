@@ -7,7 +7,7 @@ use winit::{event_loop::ActiveEventLoop, window::Window};
 pub struct GraphicsContext {
     surface: wgpu::Surface<'static>,
     pub device: wgpu::Device,
-    queue: wgpu::Queue,
+    pub queue: wgpu::Queue,
     pub surface_config: wgpu::SurfaceConfiguration,
     pub is_surface_configured: bool,
     window: Arc<Window>,

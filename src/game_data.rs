@@ -5,8 +5,7 @@ use wgpu::util::DeviceExt;
 use crate::config::AppConfig;
 
 pub struct GameData {
-    // rng: ThreadRng,
-    pub state: Vec<u32>,
+    rng: ThreadRng,
     pub game_state_buffer_a: wgpu::Buffer,
     pub game_state_buffer_b: wgpu::Buffer,
     pub is_a_current: bool,
@@ -39,9 +38,6 @@ impl ComputeUniform {
 impl GameData {
     pub fn new(device: &wgpu::Device, config: &AppConfig) -> Self {
         let mut rng = rng();
-        let state = (0..config.num_elements())
-            .map(|_| rng.random_bool(0.7) as u32)
-            .collect();
 
         let current_state = random_state(
             &mut rng,
@@ -69,7 +65,7 @@ impl GameData {
         let compute_uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: None,
             contents: bytemuck::bytes_of(&compute_uniform),
-            usage: wgpu::BufferUsages::UNIFORM,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
         let compute_uniform_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -194,8 +190,7 @@ impl GameData {
         });
 
         Self {
-            // rng,
-            state,
+            rng,
             game_state_buffer_a,
             is_a_current: true,
             game_state_buffer_b,
@@ -223,11 +218,34 @@ impl GameData {
             }],
         })
     }
-}
-
-impl GameData {
-    pub fn get_state(&self) -> &Vec<u32> {
-        &self.state
+    pub fn update_grid_state(&self, new_state: &Vec<u32>, queue: &wgpu::Queue) {
+        queue.write_buffer(
+            &self.game_state_buffer_a,
+            0,
+            bytemuck::cast_slice(new_state),
+        );
+        queue.write_buffer(
+            &self.game_state_buffer_b,
+            0,
+            bytemuck::cast_slice(new_state),
+        );
+    }
+    pub fn randomise_grid_state(&mut self, config: &AppConfig, queue: &wgpu::Queue) {
+        let new_state = random_state(
+            &mut self.rng,
+            config.num_elements() as u32,
+            config.init_rand_threshold,
+        );
+        queue.write_buffer(
+            &self.game_state_buffer_a,
+            0,
+            bytemuck::cast_slice(&new_state),
+        );
+        queue.write_buffer(
+            &self.game_state_buffer_b,
+            0,
+            bytemuck::cast_slice(&new_state),
+        );
     }
 
     pub fn get_current_compute_bind_group(&self) -> &wgpu::BindGroup {

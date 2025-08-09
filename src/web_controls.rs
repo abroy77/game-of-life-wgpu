@@ -26,3 +26,14 @@ pub fn step_forward() {
         }
     })
 }
+
+#[wasm_bindgen(js_name = "randomiseState")]
+pub fn randomise_state() {
+    EVENT_LOOP_PROXY.with(|proxy| {
+        if let Ok(guard) = proxy.lock() {
+            if let Some(proxy) = &*guard {
+                let _ = proxy.send_event(AppEvents::RandomiseState);
+            }
+        }
+    })
+}

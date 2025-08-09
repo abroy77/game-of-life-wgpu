@@ -1,4 +1,8 @@
-import init, {playPause, stepForward} from "./pkg/game_of_life.js";
+import init, {
+  playPause,
+  stepForward,
+  randomiseState,
+} from "./pkg/game_of_life.js";
 
 async function run() {
   try {
@@ -11,12 +15,11 @@ async function run() {
     console.error("Failed to load WASM:", error);
   }
 
-
   // now we setup our helper functions
-  // give them the window scope: 
-  window.playPause= playPause;
+  // give them the window scope:
+  window.playPause = playPause;
   window.stepForward = stepForward;
-  
+  window.randomiseState = randomiseState;
 }
 
 run();

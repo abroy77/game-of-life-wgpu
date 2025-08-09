@@ -5,11 +5,14 @@ use crate::{
     render_data::RenderData,
 };
 
+use log::info;
+use std::sync::Arc;
 use winit::{
     application::ApplicationHandler,
     event::{KeyEvent, WindowEvent},
     event_loop::{ActiveEventLoop, EventLoop},
     keyboard::{KeyCode, PhysicalKey},
+    window::Window,
 };
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -73,6 +76,34 @@ impl App {
             config,
         })
     }
+    #[cfg(target_arch = "wasm32")]
+    pub fn setup_graphics_context(&mut self, window: Arc<Window>) {
+        // Run the future asynchronously and use the proxy
+        // to send results to the main event loop
+
+        if let Some(proxy) = self.proxy.take() {
+            wasm_bindgen_futures::spawn_local(async move {
+                assert!(
+                    proxy
+                        .send_event(
+                            // so we can send event because we parameterised our proxy in the 'App'
+                            // to be able to send 'State' as an event!
+                            AppEvents::NewGraphicsContext(
+                                GraphicsContext::new(window)
+                                    .await
+                                    .expect(" Could not set up graphics context")
+                            )
+                        )
+                        .is_ok()
+                )
+            });
+        }
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn setup_graphics_context(&mut self, window: Arc<Window>) {
+        // On desktop we're using pollster which is a very simple async runnowner
+        self.graphics_context = Some(pollster::block_on(GraphicsContext::new(window)).unwrap());
+    }
 
     fn play_pause(&mut self) {
         self.config.is_paused = !self.config.is_paused;
@@ -94,6 +125,33 @@ impl App {
             }
         }
     }
+
+    fn randomise_state(&mut self) {
+        if let (Some(game_data), Some(graphics_context), Some(render_data)) = (
+            &mut self.game_data,
+            &mut self.graphics_context,
+            &mut self.render_data,
+        ) {
+            game_data.randomise_grid_state(&self.config, &graphics_context.queue);
+            game_data.is_a_current = true;
+            match graphics_context.render(
+                render_data,
+                game_data.get_current_render_bind_group(),
+                &self.config,
+            ) {
+                Ok(_) => {
+                    info!("shuffled rendered");
+                }
+                Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
+                    let (width, height) = graphics_context.get_size().unwrap();
+                    graphics_context.resize(width, height);
+                }
+                Err(e) => {
+                    log::error!("Unable to render {e}");
+                }
+            }
+        }
+    }
 }
 
 impl ApplicationHandler<AppEvents> for App {
@@ -103,37 +161,10 @@ impl ApplicationHandler<AppEvents> for App {
         // Now getting the window in wgpu is an asynchronous task because we're asking the GPU to get
         // it for us, then we will use it
         // This differs on web and desktop so we need two variants of this.
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            // On desktop we're using pollster which is a very simple async runnowner
-            self.graphics_context = Some(pollster::block_on(GraphicsContext::new(window)).unwrap());
-        }
-        #[cfg(target_arch = "wasm32")]
-        {
-            // Run the future asynchronously and use the proxy
-            // to send results to the main event loop
-
-            if let Some(proxy) = self.proxy.take() {
-                wasm_bindgen_futures::spawn_local(async move {
-                    assert!(
-                        proxy
-                            .send_event(
-                                // so we can send event because we parameterised our proxy in the 'App'
-                                // to be able to send 'State' as an event!
-                                AppEvents::NewGraphicsContext(
-                                    GraphicsContext::new(window)
-                                        .await
-                                        .expect(" Could not set up graphics context")
-                                )
-                            )
-                            .is_ok()
-                    )
-                });
-            }
-        }
+        self.setup_graphics_context(window);
 
         #[cfg(not(target_arch = "wasm32"))]
-        self.setup_gpu_dependencies();
+        self.setup_game_and_render_data();
 
         self.next_frame = Instant::now() + self.config.frame_duration;
         event_loop.set_control_flow(winit::event_loop::ControlFlow::WaitUntil(self.next_frame));
@@ -158,11 +189,12 @@ impl ApplicationHandler<AppEvents> for App {
                 // in web after this I don't think we need the proxy because the async steps of getting the
                 // window  / canvas are done. The app is ready!
                 self.graphics_context = Some(graphics_context);
-                self.setup_gpu_dependencies();
+                self.setup_game_and_render_data();
             }
             AppEvents::PlayPause => self.play_pause(),
             AppEvents::UpdateFps(new_fps) => self.update_fps(new_fps),
             AppEvents::StepForward => self.step_forward(),
+            AppEvents::RandomiseState => self.randomise_state(),
             _ => todo!(),
         }
     }
@@ -238,20 +270,15 @@ impl App {
             (_, _) => (),
         }
     }
-    fn setup_gpu_dependencies(&mut self) {
-        // This is run right after window creation on macos.
-        // on wasm it's run by the event loop on receipt of the NewGraphicsContextEvent
-        if self.game_data.is_none() {
-            let device = &self.graphics_context.as_ref().unwrap().device;
+    fn setup_game_and_render_data(&mut self) {
+        if let Some(graphics_context) = &self.graphics_context {
+            let device = &graphics_context.device;
 
             self.game_data = Some(GameData::new(device, &self.config));
-        }
-        // now that the graphics context is setup we can setup the render_pipeline if it's not there already
-        if self.render_data.is_none() {
+            // now that the graphics context is setup we can setup the render_pipeline if it's not there already
             // setup the render stuff now that the window and surface configurations are made
 
-            let device = &self.graphics_context.as_ref().unwrap().device;
-            let surface_config = &self.graphics_context.as_ref().unwrap().surface_config;
+            let surface_config = &graphics_context.surface_config;
             self.render_data = Some(
                 RenderData::new(
                     device,
