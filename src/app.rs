@@ -116,19 +116,19 @@ impl App {
     }
     fn update_fps(&mut self, new_fps: usize) {
         // set limits on fps to be within 0 and 60. clip the values at those limits
-        self.config.frame_duration = Duration::from_secs(new_fps.clamp(1, 60) as u64)
+        self.config.frame_duration = Duration::from_millis((1000 / new_fps.clamp(1, 60)) as u64);
+        self.next_frame = Instant::now() + self.config.frame_duration;
     }
 
     fn step_forward(&mut self) {
         // need to check if we're paused, and if so, run a single compute update
         // and render pass
-        if self.config.is_paused {
-            if let Some(gc) = &mut self.graphics_context {
-                if let Some(game_data) = &mut self.game_data {
-                    gc.update(game_data, &self.config);
-                    gc.request_redraw();
-                }
-            }
+        if !self.config.is_paused {
+            return;
+        }
+        if let (Some(gc), Some(game_data)) = (&mut self.graphics_context, &mut self.game_data) {
+            gc.update(game_data, &self.config);
+            gc.request_redraw();
         }
     }
 

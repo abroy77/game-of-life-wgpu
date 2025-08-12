@@ -111,6 +111,19 @@
             Shuffle!
           </button>
         </div>
+        <div class="slider-group">
+          <label for="fpsSlider"> Frames Per Second: </label>
+          <input
+            type="range"
+            id="fpsSlider"
+            min="1"
+            max="60"
+            step="1"
+            value="20"
+            oninput="window.updateFps(this.value)"
+          />
+          <span id="fpsValue">20</span>
+        </div>
       </div>
 
       <div class="info">

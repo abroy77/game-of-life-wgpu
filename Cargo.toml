@@ -33,4 +33,5 @@ wasm-bindgen = "0.2.100"
 wasm-bindgen-futures = "0.4.50"
 getrandom = { version = "0.3.3", features=["wasm_js"]}
 web-time = "1.1.0"
+web-sys="0.3"
 
