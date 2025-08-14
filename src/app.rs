@@ -2,6 +2,7 @@ use crate::{
     config::{AppConfig, load_config},
     game_data::GameData,
     graphics::{self, GraphicsContext},
+    mouse_handler::MousePainter,
     render_data::RenderData,
 };
 
@@ -9,7 +10,7 @@ use log::info;
 use std::sync::Arc;
 use winit::{
     application::ApplicationHandler,
-    event::{KeyEvent, WindowEvent},
+    event::{ElementState, KeyEvent, MouseButton, WindowEvent},
     event_loop::{ActiveEventLoop, EventLoop},
     keyboard::{KeyCode, PhysicalKey},
     window::Window,
@@ -59,6 +60,7 @@ pub struct App {
     render_data: Option<RenderData>,
     game_data: Option<GameData>,
     next_frame: Instant,
+    mouse: MousePainter,
     config: AppConfig,
 }
 
@@ -71,6 +73,7 @@ impl App {
         let config = load_config();
 
         let next_frame = Instant::now() + config.frame_duration;
+        let mouse = MousePainter::new();
 
         Ok(Self {
             #[cfg(target_arch = "wasm32")]
@@ -80,6 +83,7 @@ impl App {
             game_data: None,
             next_frame,
             config,
+            mouse,
         })
     }
     #[cfg(target_arch = "wasm32")]
@@ -158,6 +162,65 @@ impl App {
             }
         }
     }
+    fn handle_key(&mut self, event_loop: &ActiveEventLoop, code: KeyCode, is_pressed: bool) {
+        match (code, is_pressed) {
+            (KeyCode::Escape, true) => event_loop.exit(),
+            (KeyCode::Space, true) => self.play_pause(),
+            (KeyCode::ArrowRight, true) => self.step_forward(),
+            (_, _) => (),
+        }
+    }
+
+    fn setup_game_and_render_data(&mut self) {
+        if let Some(graphics_context) = &self.graphics_context {
+            let device = &graphics_context.device;
+
+            self.game_data = Some(GameData::new(device, &self.config));
+            // now that the graphics context is setup we can setup the render_pipeline if it's not there already
+            // setup the render stuff now that the window and surface configurations are made
+
+            let surface_config = &graphics_context.surface_config;
+            self.render_data = Some(
+                RenderData::new(
+                    device,
+                    surface_config,
+                    &GameData::get_render_bind_group_layout(device),
+                    &self.config,
+                )
+                .unwrap(),
+            );
+        }
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    fn reset_cursor(&mut self, event_loop: &ActiveEventLoop) {
+        if let Some(graphics_context) = &self.graphics_context {
+            let (window_width, window_height) = graphics_context.get_window_size();
+            let scale_factor = graphics_context.window.scale_factor() as f32;
+            let (window_width, window_height) = (
+                window_width as f32 / scale_factor,
+                window_height as f32 / scale_factor,
+            );
+            let cursor_width = ((window_width * self.config.cell_size) / 2.0) as u16;
+            let cursor_height = ((window_height * self.config.cell_size) / 2.0) as u16;
+
+            let rgba_buffer: Vec<u8> = repeat_n(
+                self.config.cursor_color,
+                (cursor_width * cursor_height) as usize,
+            )
+            .flatten()
+            .collect();
+            let custom_cursor_source = CustomCursor::from_rgba(
+                rgba_buffer,
+                cursor_width,
+                cursor_height,
+                cursor_width / 2,
+                cursor_height / 2,
+            )
+            .unwrap();
+            let custom_cursor = event_loop.create_custom_cursor(custom_cursor_source);
+            graphics_context.window.set_cursor(custom_cursor);
+        }
+    }
 }
 
 impl ApplicationHandler<AppEvents> for App {
@@ -220,8 +283,11 @@ impl ApplicationHandler<AppEvents> for App {
                 event_loop.exit();
             }
             WindowEvent::Resized(size) => {
-                info!("about to resize");
                 graphics_context.resize(size.width, size.height);
+                self.mouse.configure(
+                    (self.config.cols, self.config.rows),
+                    (size.width as usize, size.height as usize),
+                );
                 #[cfg(not(target_arch = "wasm32"))]
                 self.reset_cursor(event_loop);
             }
@@ -254,11 +320,44 @@ impl ApplicationHandler<AppEvents> for App {
                     },
                 ..
             } => self.handle_key(event_loop, code, state.is_pressed()),
+            WindowEvent::CursorEntered { device_id: _ } => self.mouse.in_grid = true,
+            WindowEvent::CursorLeft { device_id: _ } => self.mouse.in_grid = false,
+            WindowEvent::MouseInput {
+                device_id: _,
+                state: ElementState::Released,
+                button: MouseButton::Left,
+            } => self.mouse.is_pressed = false,
+            WindowEvent::MouseInput {
+                device_id: _,
+                state: ElementState::Pressed,
+                button: MouseButton::Left,
+            } => {
+                // if we're in the grid, then we want to add stuff to the buffer. but the points we want to add are going to not just be
+                self.mouse.is_pressed = true;
+                if self.mouse.in_grid {
+                    self.mouse.add_to_buffer();
+                }
+            }
+            WindowEvent::CursorMoved {
+                device_id: _,
+                position: phys_pos,
+            } => {
+                // we only want to add positions to the buffer if in grid and pressed
+                if self.mouse.is_pressed && self.mouse.in_grid {
+                    self.mouse.pos = phys_pos;
+                    self.mouse.add_to_buffer();
+                }
+            }
+
             _ => {}
         }
     }
     fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
         let now = Instant::now();
+        // paint logic here?
+        if now >= self.mouse.next_buffer_clear {
+            // we put this data into a staging buffer and add to our current_state_buffer
+        }
         if now >= self.next_frame && !self.config.is_paused {
             // if we're ready for next frame and not paused then we update and send redraw command
             if let (Some(gc), Some(game_data)) = (&mut self.graphics_context, &mut self.game_data) {
@@ -266,67 +365,6 @@ impl ApplicationHandler<AppEvents> for App {
                 gc.request_redraw();
             }
             self.next_frame = now + self.config.frame_duration;
-        }
-    }
-}
-
-impl App {
-    fn handle_key(&mut self, event_loop: &ActiveEventLoop, code: KeyCode, is_pressed: bool) {
-        match (code, is_pressed) {
-            (KeyCode::Escape, true) => event_loop.exit(),
-            (KeyCode::Space, true) => self.play_pause(),
-            (KeyCode::ArrowRight, true) => self.step_forward(),
-            (_, _) => (),
-        }
-    }
-    fn setup_game_and_render_data(&mut self) {
-        if let Some(graphics_context) = &self.graphics_context {
-            let device = &graphics_context.device;
-
-            self.game_data = Some(GameData::new(device, &self.config));
-            // now that the graphics context is setup we can setup the render_pipeline if it's not there already
-            // setup the render stuff now that the window and surface configurations are made
-
-            let surface_config = &graphics_context.surface_config;
-            self.render_data = Some(
-                RenderData::new(
-                    device,
-                    surface_config,
-                    &GameData::get_render_bind_group_layout(device),
-                    &self.config,
-                )
-                .unwrap(),
-            );
-        }
-    }
-    #[cfg(not(target_arch = "wasm32"))]
-    fn reset_cursor(&mut self, event_loop: &ActiveEventLoop) {
-        if let Some(graphics_context) = &self.graphics_context {
-            let (window_width, window_height) = graphics_context.get_window_size();
-            let scale_factor = graphics_context.window.scale_factor() as f32;
-            let (window_width, window_height) = (
-                window_width as f32 / scale_factor,
-                window_height as f32 / scale_factor,
-            );
-            let cursor_width = ((window_width * self.config.cell_size) / 2.0) as u16;
-            let cursor_height = ((window_height * self.config.cell_size) / 2.0) as u16;
-
-            let rgba_buffer: Vec<u8> = repeat_n(
-                self.config.cursor_color,
-                (cursor_width * cursor_height) as usize,
-            )
-            .flatten()
-            .collect();
-            let custom_cursor_source = CustomCursor::from_rgba(
-                rgba_buffer,
-                cursor_width,
-                cursor_height,
-                cursor_width / 2,
-                cursor_height / 2,
-            )
-            .unwrap();
-            let custom_cursor = event_loop.create_custom_cursor(custom_cursor_source);
-            graphics_context.window.set_cursor(custom_cursor);
         }
     }
 }

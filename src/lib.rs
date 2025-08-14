@@ -2,6 +2,7 @@ pub mod app;
 pub mod config;
 pub mod game_data;
 pub mod graphics;
+pub mod mouse_handler;
 pub mod render_data;
 pub mod vertex;
 #[cfg(target_arch = "wasm32")]
