@@ -60,7 +60,7 @@ pub struct App {
     render_data: Option<RenderData>,
     game_data: Option<GameData>,
     next_frame: Instant,
-    mouse: MousePainter,
+    mouse: Option<MousePainter>,
     config: AppConfig,
 }
 
@@ -73,7 +73,7 @@ impl App {
         let config = load_config();
 
         let next_frame = Instant::now() + config.frame_duration;
-        let mouse = MousePainter::new();
+        let mouse = None;
 
         Ok(Self {
             #[cfg(target_arch = "wasm32")]
