@@ -14,6 +14,7 @@ pub struct RawConfig {
     pub cols: usize,
     pub gap_ratio: f32,
     pub fps: usize,
+    pub paint_fps: usize,
     pub init_rand_threshold: f64,
     pub window_size: Option<(usize, usize)>,
     pub background_color: [u8; 4],
@@ -27,8 +28,10 @@ pub struct AppConfig {
     pub cell_size: f32,
     pub gap_size: f32,
     pub fps: usize,
+    pub paint_fps: usize,
     pub init_rand_threshold: f64,
     pub frame_duration: Duration,
+    pub paint_frame_duration: Duration,
     pub window_size: Option<(usize, usize)>,
     pub compute_dispatches: [usize; 2],
     pub is_paused: bool,
@@ -46,6 +49,7 @@ impl From<RawConfig> for AppConfig {
         let cell_size = 2.0 / (num_to_fit + (num_to_fit + 1.0) * value.gap_ratio);
         let gap_size = value.gap_ratio * cell_size;
         let frame_duration = Duration::from_nanos(1_000_000_000 / value.fps as u64);
+        let paint_frame_duration = Duration::from_nanos(1_000_000_000 / value.paint_fps as u64);
         let compute_dispatches = [
             (value.cols / COMPUTE_WORKGROUP_SIZE[0]) + 1,
             (value.rows / COMPUTE_WORKGROUP_SIZE[1]) + 1,
@@ -56,8 +60,10 @@ impl From<RawConfig> for AppConfig {
             cols: value.cols,
             cell_size,
             fps: value.fps,
+            paint_fps: value.paint_fps,
             init_rand_threshold: value.init_rand_threshold,
             frame_duration,
+            paint_frame_duration,
             gap_size,
             compute_dispatches,
             window_size: value.window_size,

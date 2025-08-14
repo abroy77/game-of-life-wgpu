@@ -2,6 +2,7 @@ rows = 10
 cols = 10
 gap_ratio = 0.15
 fps = 20
+paint_fps = 60
 init_rand_threshold = 0.5
 background_color = [0,0,0,0]
 cursor_color = [255,0,0,255]

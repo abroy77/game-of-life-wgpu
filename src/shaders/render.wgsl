@@ -12,7 +12,7 @@ struct RenderUniform {
 @group(0) @binding(0)
 var<uniform> uniforms: RenderUniform;
 @group(1) @binding(0)
-var<storage,read> current_state: array<u32>;
+var<storage,read_write> current_state: array<u32>;
 
 
 @vertex

@@ -1,4 +1,7 @@
-use crate::{config::AppConfig, game_data::GameData, render_data::RenderData, vertex::INDICES};
+use crate::{
+    config::AppConfig, game_data::GameData, paint::MousePainter, render_data::RenderData,
+    vertex::INDICES,
+};
 use std::sync::Arc;
 #[cfg(target_arch = "wasm32")]
 use winit::window::WindowAttributes;
@@ -213,7 +216,7 @@ impl GraphicsContext {
     pub fn render(
         &mut self,
         render_data: &RenderData,
-        game_state_bind_group: &wgpu::BindGroup,
+        game_state_render_bind_group: &wgpu::BindGroup,
         config: &AppConfig,
     ) -> Result<(), wgpu::SurfaceError> {
         if !self.is_surface_configured {
@@ -265,7 +268,7 @@ impl GraphicsContext {
                 });
                 render_pass.set_pipeline(&render_data.pipeline);
                 render_pass.set_bind_group(0, &render_data.render_uniform_bind_group, &[]);
-                render_pass.set_bind_group(1, game_state_bind_group, &[]);
+                render_pass.set_bind_group(1, game_state_render_bind_group, &[]);
                 render_pass.set_vertex_buffer(0, render_data.vertex_buffer.slice(..));
                 render_pass.set_vertex_buffer(1, render_data.instance_buffer.slice(..));
                 render_pass.set_index_buffer(
@@ -288,6 +291,78 @@ impl GraphicsContext {
             output.present();
 
             Ok(())
+        }
+    }
+    pub fn paint(
+        &mut self,
+        mouse_painter: &mut MousePainter,
+        compute_uniform_bind_group: &wgpu::BindGroup,
+        game_state_render_bind_group: &wgpu::BindGroup,
+        config: &AppConfig,
+    ) -> Result<(), wgpu::SurfaceError> {
+        if !self.is_surface_configured {
+            // don't render unless surface is configured
+            Ok(())
+        } else {
+            //
+            mouse_painter.write_to_buffer(&self.queue);
+            mouse_painter.clear_buffer();
+            {
+                let mut encoder =
+                    self.device
+                        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                            label: Some("Painter Encoder"),
+                        });
+
+                {
+                    let mut compute_pass =
+                        encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                            label: Some("Compute Pass"),
+                            timestamp_writes: None,
+                        });
+
+                    compute_pass.set_pipeline(&mouse_painter.painter_pipeline);
+                    compute_pass.set_bind_group(0, compute_uniform_bind_group, &[]);
+                    compute_pass.set_bind_group(1, game_state_render_bind_group, &[]);
+                    compute_pass.set_bind_group(2, &mouse_painter.painter_buffer_bind_group, &[]);
+                    compute_pass.dispatch_workgroups(
+                        config.compute_dispatches[0] as u32,
+                        config.compute_dispatches[1] as u32,
+                        1,
+                    );
+                } // using std::iter::once to make a simple iterable that yields
+                // a single item. This means I don't need to make a vec or array.
+                // let buffer_size =
+                //     (config.num_elements() * std::mem::size_of::<u32>()) as wgpu::BufferAddress;
+                // let staging_buffer_a = self.device.create_buffer(&wgpu::BufferDescriptor {
+                //     label: Some("Staging Buffer A"),
+                //     size: buffer_size,
+                //     usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+                //     mapped_at_creation: false,
+                // });
+                // encoder.copy_buffer_to_buffer(
+                //     &game_data.game_state_buffer_a,
+                //     0,
+                //     &staging_buffer_a,
+                //     0,
+                //     buffer_size,
+                // );
+                // let staging_buffer_b = self.device.create_buffer(&wgpu::BufferDescriptor {
+                //     label: Some("Staging Buffer B"),
+                //     size: buffer_size,
+                //     usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+                //     mapped_at_creation: false,
+                // });
+                // encoder.copy_buffer_to_buffer(
+                //     &game_data.game_state_buffer_b,
+                //     0,
+                //     &staging_buffer_b,
+                //     0,
+                //     buffer_size,
+                // );
+                self.queue.submit(std::iter::once(encoder.finish()));
+                Ok(())
+            }
         }
     }
 }

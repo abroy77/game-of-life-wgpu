@@ -2,12 +2,13 @@ use crate::{
     config::{AppConfig, load_config},
     game_data::GameData,
     graphics::{self, GraphicsContext},
-    mouse_handler::MousePainter,
+    paint::MousePainter,
     render_data::RenderData,
 };
 
 use log::info;
-use std::sync::Arc;
+use std::cmp;
+use std::{ops::DerefMut, sync::Arc};
 use winit::{
     application::ApplicationHandler,
     event::{ElementState, KeyEvent, MouseButton, WindowEvent},
@@ -60,6 +61,7 @@ pub struct App {
     render_data: Option<RenderData>,
     game_data: Option<GameData>,
     next_frame: Instant,
+    next_paint_frame: Instant,
     mouse: Option<MousePainter>,
     config: AppConfig,
 }
@@ -73,7 +75,7 @@ impl App {
         let config = load_config();
 
         let next_frame = Instant::now() + config.frame_duration;
-        let mouse = None;
+        let next_paint_frame = Instant::now() + config.paint_frame_duration;
 
         Ok(Self {
             #[cfg(target_arch = "wasm32")]
@@ -82,8 +84,9 @@ impl App {
             render_data: None,
             game_data: None,
             next_frame,
+            next_paint_frame,
             config,
-            mouse,
+            mouse: None,
         })
     }
     #[cfg(target_arch = "wasm32")]
@@ -273,9 +276,9 @@ impl ApplicationHandler<AppEvents> for App {
         _window_id: winit::window::WindowId,
         event: winit::event::WindowEvent,
     ) {
-        let graphics_context = match &mut self.graphics_context {
-            Some(gc) => gc,
-            None => return,
+        let (graphics_context, mouse) = match (&mut self.graphics_context, &mut self.mouse) {
+            (Some(gc), Some(mouse)) => (gc, mouse),
+            (_, _) => return,
         };
 
         match event {
@@ -284,10 +287,7 @@ impl ApplicationHandler<AppEvents> for App {
             }
             WindowEvent::Resized(size) => {
                 graphics_context.resize(size.width, size.height);
-                self.mouse.configure(
-                    (self.config.cols, self.config.rows),
-                    (size.width as usize, size.height as usize),
-                );
+                mouse.configure(&size, &self.config);
                 #[cfg(not(target_arch = "wasm32"))]
                 self.reset_cursor(event_loop);
             }
@@ -320,22 +320,22 @@ impl ApplicationHandler<AppEvents> for App {
                     },
                 ..
             } => self.handle_key(event_loop, code, state.is_pressed()),
-            WindowEvent::CursorEntered { device_id: _ } => self.mouse.in_grid = true,
-            WindowEvent::CursorLeft { device_id: _ } => self.mouse.in_grid = false,
+            WindowEvent::CursorEntered { device_id: _ } => mouse.in_grid = true,
+            WindowEvent::CursorLeft { device_id: _ } => mouse.in_grid = false,
             WindowEvent::MouseInput {
                 device_id: _,
                 state: ElementState::Released,
                 button: MouseButton::Left,
-            } => self.mouse.is_pressed = false,
+            } => mouse.is_pressed = false,
             WindowEvent::MouseInput {
                 device_id: _,
                 state: ElementState::Pressed,
                 button: MouseButton::Left,
             } => {
                 // if we're in the grid, then we want to add stuff to the buffer. but the points we want to add are going to not just be
-                self.mouse.is_pressed = true;
-                if self.mouse.in_grid {
-                    self.mouse.add_to_buffer();
+                mouse.is_pressed = true;
+                if mouse.in_grid {
+                    mouse.add_to_buffer(&self.config);
                 }
             }
             WindowEvent::CursorMoved {
@@ -343,20 +343,33 @@ impl ApplicationHandler<AppEvents> for App {
                 position: phys_pos,
             } => {
                 // we only want to add positions to the buffer if in grid and pressed
-                if self.mouse.is_pressed && self.mouse.in_grid {
-                    self.mouse.pos = phys_pos;
-                    self.mouse.add_to_buffer();
+                if mouse.is_pressed && mouse.in_grid {
+                    mouse.pos = phys_pos;
+                    mouse.add_to_buffer(&self.config);
                 }
             }
 
             _ => {}
         }
     }
-    fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
         let now = Instant::now();
         // paint logic here?
-        if now >= self.mouse.next_buffer_clear {
+        if now >= self.next_paint_frame {
             // we put this data into a staging buffer and add to our current_state_buffer
+            if let (Some(gc), Some(mouse), Some(game_data)) = (
+                &mut self.graphics_context,
+                &mut self.mouse,
+                &mut self.game_data,
+            ) {
+                _ = gc.paint(
+                    mouse,
+                    &game_data.compute_uniform_bind_group,
+                    game_data.get_current_render_bind_group(),
+                    &self.config,
+                );
+            }
+            self.next_paint_frame = now + self.config.paint_frame_duration;
         }
         if now >= self.next_frame && !self.config.is_paused {
             // if we're ready for next frame and not paused then we update and send redraw command
@@ -366,6 +379,8 @@ impl ApplicationHandler<AppEvents> for App {
             }
             self.next_frame = now + self.config.frame_duration;
         }
+        let next_deadline = cmp::min(self.next_frame, self.next_paint_frame);
+        event_loop.set_control_flow(winit::event_loop::ControlFlow::WaitUntil(next_deadline));
     }
 }
 
