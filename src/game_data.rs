@@ -134,7 +134,7 @@ impl GameData {
             ],
         });
 
-        let render_bind_group_layout = GameData::get_render_bind_group_layout(device);
+        let render_bind_group_layout = GameData::get_render_bind_group_layout(device, true);
 
         let render_bind_group_a = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Render Bind Group A"),
@@ -191,15 +191,18 @@ impl GameData {
         }
     }
 
-    pub fn get_render_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
+    pub fn get_render_bind_group_layout(
+        device: &wgpu::Device,
+        read_only: bool,
+    ) -> wgpu::BindGroupLayout {
         device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("Render Bind Group Layout"),
             entries: &[wgpu::BindGroupLayoutEntry {
                 binding: 0,
-                visibility: wgpu::ShaderStages::all(),
+                visibility: wgpu::ShaderStages::COMPUTE | wgpu::ShaderStages::VERTEX_FRAGMENT,
                 ty: wgpu::BindingType::Buffer {
                     // we need to be able to write to it to paint
-                    ty: wgpu::BufferBindingType::Storage { read_only: false },
+                    ty: wgpu::BufferBindingType::Storage { read_only },
                     has_dynamic_offset: false,
                     min_binding_size: None,
                 },

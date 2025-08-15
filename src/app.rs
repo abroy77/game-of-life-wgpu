@@ -187,7 +187,7 @@ impl App {
                 RenderData::new(
                     device,
                     surface_config,
-                    &GameData::get_render_bind_group_layout(device),
+                    &GameData::get_render_bind_group_layout(device, true),
                     &self.config,
                 )
                 .unwrap(),
@@ -362,6 +362,7 @@ impl ApplicationHandler<AppEvents> for App {
                 &mut self.mouse,
                 &mut self.game_data,
             ) {
+                println!("bro watup");
                 _ = gc.paint(
                     mouse,
                     &game_data.compute_uniform_bind_group,
