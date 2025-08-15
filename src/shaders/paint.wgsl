@@ -23,7 +23,7 @@ fn  main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let idx = pos_to_index(pos);
 
     current_state[idx] = current_state[idx] | paint_buffer[idx];
-
+    return;
 }
 
 fn pos_to_index(pos: vec2<i32>) -> u32 {

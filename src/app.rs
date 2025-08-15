@@ -192,6 +192,15 @@ impl App {
                 )
                 .unwrap(),
             );
+
+            self.mouse = Some(MousePainter::new(
+                device,
+                &GameData::get_render_bind_group_layout(device, false),
+                &GameData::get_compute_uniform_bind_group_layout(device),
+                &self.config,
+                graphics_context.window.clone(),
+            ));
+            println!("got the gc set up and all");
         }
     }
     #[cfg(not(target_arch = "wasm32"))]
@@ -362,13 +371,14 @@ impl ApplicationHandler<AppEvents> for App {
                 &mut self.mouse,
                 &mut self.game_data,
             ) {
-                println!("bro watup");
                 _ = gc.paint(
                     mouse,
                     &game_data.compute_uniform_bind_group,
                     game_data.get_current_render_bind_group(),
                     &self.config,
                 );
+                println!("paint done");
+                gc.request_redraw();
             }
             self.next_paint_frame = now + self.config.paint_frame_duration;
         }
@@ -380,6 +390,7 @@ impl ApplicationHandler<AppEvents> for App {
             }
             self.next_frame = now + self.config.frame_duration;
         }
+
         let next_deadline = cmp::min(self.next_frame, self.next_paint_frame);
         event_loop.set_control_flow(winit::event_loop::ControlFlow::WaitUntil(next_deadline));
     }
