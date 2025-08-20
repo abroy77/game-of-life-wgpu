@@ -306,10 +306,8 @@ impl GraphicsContext {
             Ok(())
         } else {
             //
-            println!("about to write to paint to buffer");
             mouse_painter.write_to_buffer(&self.queue);
             mouse_painter.clear_buffer();
-            println!("written to buffer");
 
             let mut encoder = self
                 .device

@@ -22,7 +22,7 @@ impl MousePainter {
     pub fn new(
         device: &wgpu::Device,
         //render buffer is bound at 0
-        render_bindgroup_layout: &wgpu::BindGroupLayout,
+        compute_bind_group_layout: &wgpu::BindGroupLayout,
         // compute uniform bound at 0
         compute_uniform_bind_group_layout: &wgpu::BindGroupLayout,
         config: &AppConfig,
@@ -83,8 +83,8 @@ impl MousePainter {
                 label: Some("Painter Pipeline Layout"),
                 bind_group_layouts: &[
                     compute_uniform_bind_group_layout,
+                    &compute_bind_group_layout,
                     &painter_bind_group_layout,
-                    render_bindgroup_layout,
                 ],
                 push_constant_ranges: &[],
             });
@@ -119,11 +119,14 @@ impl MousePainter {
         // we need to convert the physical coords into the array index for the cell
         let (div_x, div_y) = self.array_div_factor;
         let x = self.pos.x.round() as usize / div_x;
-        let y = self.pos.y.round() as usize / div_y;
+        // we do this because NDC is from down to up in y.
+        // but the window coordinates are top to bottow
+        let y = config.rows - 1 - self.pos.y.round() as usize / div_y;
         // now get the array_pos:
         let array_pos = x + config.cols * y;
-        println!("array_pos: {array_pos}");
-        self.paint_buffer_cpu[array_pos] = 1;
+        if array_pos < self.paint_buffer_cpu.len() {
+            self.paint_buffer_cpu[array_pos] = 1;
+        }
     }
     pub fn clear_buffer(&mut self) {
         self.paint_buffer_cpu.iter_mut().for_each(|x| *x = 0);

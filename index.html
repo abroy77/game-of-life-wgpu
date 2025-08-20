@@ -127,7 +127,7 @@
       </div>
 
       <div class="info">
-        <h3>Implemented in Rust using winit, and wgpu.</h3>
+        <h3>Click and drag on the game to paint!</h3>
         <p>
           Conway's game of life is a 2D cellular automata where at each
           iteration a set of rules decides whether a cell lives / dies / stays
@@ -139,7 +139,6 @@
           <a href="https://github.com/abroy77/game-of-life-wgpu/issues">here</a
           >!
         </p>
-
         <h4>Troubleshooting:</h4>
         <p>
           Requires WebGPU to be enabled. You may need to install the latest
@@ -149,6 +148,11 @@
         <p>
           Go to Safari > Settings > Apps > Safari > Advanced > Feature Flags >
           enable webgpu > True. This should allow the simulation to run.
+        </p>
+        <h4>Implementation details</h4>
+        <p>
+          This was written in Rust using winit and wgpu. It runs on your
+          device's gpu which allows it to be performant and efficent.
         </p>
       </div>
     </div>

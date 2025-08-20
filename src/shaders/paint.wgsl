@@ -6,8 +6,10 @@ struct GridInfo {
 
 @group(0)@binding(0)
 var<uniform> grid: GridInfo;
+
 @group(1)@binding(0)
 var<storage, read_write> current_state: array<u32>;
+
 @group(2)@binding(0)
 var<storage, read> paint_buffer: array<u32>;
 

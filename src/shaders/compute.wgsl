@@ -7,7 +7,7 @@ struct GridInfo {
 var<uniform> grid: GridInfo;
 
 @group(1)@binding(0)
-var<storage, read> current_state: array<u32>;
+var<storage, read_write> current_state: array<u32>;
 @group(1)@binding(1)
 var<storage, read_write> next_state: array<u32>;
 

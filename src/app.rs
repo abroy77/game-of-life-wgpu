@@ -8,7 +8,7 @@ use crate::{
 
 use log::info;
 use std::cmp;
-use std::{ops::DerefMut, sync::Arc};
+use std::sync::Arc;
 use winit::{
     application::ApplicationHandler,
     event::{ElementState, KeyEvent, MouseButton, WindowEvent},
@@ -187,7 +187,7 @@ impl App {
                 RenderData::new(
                     device,
                     surface_config,
-                    &GameData::get_render_bind_group_layout(device, true),
+                    &GameData::get_render_bind_group_layout(device),
                     &self.config,
                 )
                 .unwrap(),
@@ -195,7 +195,7 @@ impl App {
 
             self.mouse = Some(MousePainter::new(
                 device,
-                &GameData::get_render_bind_group_layout(device, false),
+                &GameData::get_compute_bind_group_layout(device),
                 &GameData::get_compute_uniform_bind_group_layout(device),
                 &self.config,
                 graphics_context.window.clone(),
@@ -335,17 +335,15 @@ impl ApplicationHandler<AppEvents> for App {
                 device_id: _,
                 state: ElementState::Released,
                 button: MouseButton::Left,
-            } => mouse.is_pressed = false,
+            } => {
+                mouse.is_pressed = false;
+            }
             WindowEvent::MouseInput {
                 device_id: _,
                 state: ElementState::Pressed,
                 button: MouseButton::Left,
             } => {
-                // if we're in the grid, then we want to add stuff to the buffer. but the points we want to add are going to not just be
                 mouse.is_pressed = true;
-                if mouse.in_grid {
-                    mouse.add_to_buffer(&self.config);
-                }
             }
             WindowEvent::CursorMoved {
                 device_id: _,
@@ -374,10 +372,9 @@ impl ApplicationHandler<AppEvents> for App {
                 _ = gc.paint(
                     mouse,
                     &game_data.compute_uniform_bind_group,
-                    game_data.get_current_render_bind_group(),
+                    game_data.get_current_compute_bind_group(),
                     &self.config,
                 );
-                println!("paint done");
                 gc.request_redraw();
             }
             self.next_paint_frame = now + self.config.paint_frame_duration;
