@@ -152,9 +152,7 @@ impl App {
                 game_data.get_current_render_bind_group(),
                 &self.config,
             ) {
-                Ok(_) => {
-                    info!("shuffled rendered");
-                }
+                Ok(_) => {}
                 Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
                     let (width, height) = graphics_context.get_size().unwrap();
                     graphics_context.resize(width, height);
@@ -296,9 +294,16 @@ impl ApplicationHandler<AppEvents> for App {
             }
             WindowEvent::Resized(size) => {
                 graphics_context.resize(size.width, size.height);
-                mouse.configure(&size, &self.config);
+                mouse.configure(&graphics_context.window, &self.config);
+                info!("resized to {}, {}", size.width, size.height);
                 #[cfg(not(target_arch = "wasm32"))]
                 self.reset_cursor(event_loop);
+            }
+            WindowEvent::ScaleFactorChanged {
+                scale_factor: _,
+                inner_size_writer: _,
+            } => {
+                mouse.configure(&graphics_context.window, &self.config);
             }
             WindowEvent::RedrawRequested => {
                 match graphics_context.render(

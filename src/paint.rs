@@ -1,3 +1,4 @@
+use log::info;
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
 use winit::dpi::{PhysicalPosition, PhysicalSize};
@@ -16,8 +17,15 @@ pub struct MousePainter {
     pub array_div_factor: (usize, usize),
     pub painter_pipeline: wgpu::ComputePipeline,
     pub painter_buffer_bind_group: wgpu::BindGroup,
+    pub scale_factor: f64,
 }
 
+fn get_window_logical_size(window: &Arc<Window>) -> (f32, f32) {
+    // let log = window.inner_size().to_logical(window.scale_factor());
+    let log = window.inner_size();
+    let (x, y) = (log.width as f32, log.height as f32);
+    return (x, y);
+}
 impl MousePainter {
     pub fn new(
         device: &wgpu::Device,
@@ -28,11 +36,13 @@ impl MousePainter {
         config: &AppConfig,
         window: Arc<Window>,
     ) -> Self {
-        let window_size = window.inner_size();
+        let window_size = get_window_logical_size(&window);
+        info!("new mousey size {} {}", window_size.0, window_size.1);
         let array_div_factor = (
-            window_size.width as usize / config.cols,
-            window_size.height as usize / config.rows,
+            window_size.0 as usize / config.cols,
+            window_size.1 as usize / config.rows,
         );
+        let scale_factor = window.scale_factor();
         // so here we don't need a premade buffer. we will make it on the fly from our slice.
         // do we need a buffer layout? nah
         // we do need a bind group so we can bind 2 things in our paint shader
@@ -112,6 +122,7 @@ impl MousePainter {
             array_div_factor,
             painter_pipeline,
             painter_buffer_bind_group,
+            scale_factor,
         }
     }
     // set the cell array position to 1
@@ -131,10 +142,11 @@ impl MousePainter {
     pub fn clear_buffer(&mut self) {
         self.paint_buffer_cpu.iter_mut().for_each(|x| *x = 0);
     }
-    pub fn configure(&mut self, window_size: &PhysicalSize<u32>, config: &AppConfig) {
+    pub fn configure(&mut self, window: &Arc<Window>, config: &AppConfig) {
+        let window_size = get_window_logical_size(window);
         self.array_div_factor = (
-            window_size.width as usize / config.cols,
-            window_size.height as usize / config.rows,
+            window_size.0 as usize / config.cols,
+            window_size.1 as usize / config.rows,
         );
     }
     // configure the buffer size and the div factor when we resize the window

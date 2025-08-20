@@ -1,5 +1,5 @@
-rows = 10
-cols = 10
+rows = 100
+cols = 100
 gap_ratio = 0.15
 fps = 20
 paint_fps = 60
