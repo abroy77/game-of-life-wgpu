@@ -1,7 +1,7 @@
 use log::info;
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
-use winit::dpi::{PhysicalPosition, PhysicalSize};
+use winit::dpi::PhysicalPosition;
 use winit::window::Window;
 
 use crate::config::AppConfig;
@@ -24,7 +24,7 @@ fn get_window_logical_size(window: &Arc<Window>) -> (f32, f32) {
     // let log = window.inner_size().to_logical(window.scale_factor());
     let log = window.inner_size();
     let (x, y) = (log.width as f32, log.height as f32);
-    return (x, y);
+    (x, y)
 }
 impl MousePainter {
     pub fn new(
@@ -93,7 +93,7 @@ impl MousePainter {
                 label: Some("Painter Pipeline Layout"),
                 bind_group_layouts: &[
                     compute_uniform_bind_group_layout,
-                    &compute_bind_group_layout,
+                    compute_bind_group_layout,
                     &painter_bind_group_layout,
                 ],
                 push_constant_ranges: &[],
