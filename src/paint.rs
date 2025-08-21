@@ -131,12 +131,15 @@ impl MousePainter {
         let (div_x, div_y) = self.array_div_factor;
         let x = self.pos.x.round() as usize / div_x;
         // we do this because NDC is from down to up in y.
-        // but the window coordinates are top to bottow
-        let y = config.rows - 1 - self.pos.y.round() as usize / div_y;
-        // now get the array_pos:
-        let array_pos = x + config.cols * y;
-        if array_pos < self.paint_buffer_cpu.len() {
-            self.paint_buffer_cpu[array_pos] = 1;
+        // but the window coordinates are top to bottom
+        // need to do a checked subtraction to prevent overflow issues
+        let y = (config.rows - 1).checked_sub(self.pos.y.round() as usize / div_y);
+        if let Some(y) = y {
+            // now get the array_pos:
+            let array_pos = x + config.cols * y;
+            if array_pos < self.paint_buffer_cpu.len() {
+                self.paint_buffer_cpu[array_pos] = 1;
+            }
         }
     }
     pub fn clear_buffer(&mut self) {
