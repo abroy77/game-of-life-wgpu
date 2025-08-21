@@ -2,160 +2,322 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Game of Life: WGPU</title>
     <style>
-      * {
-        margin: 0;
-        padding: 0;
+      /* Base reset and tokens */
+      *,
+      *::before,
+      *::after {
         box-sizing: border-box;
       }
-
+      :root {
+        --bg: #fafafa;
+        --card: #ffffff;
+        --ink: #1f1f1f;
+        --ink-soft: #4a4a4a;
+        --line: #e6e6e6;
+        --ring: #2b2b2b;
+        --radius: 12px;
+        --shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+        --gap: 20px;
+      }
+      html,
       body {
-        font-family: system-ui, sans-serif;
-        background: #fafafa;
-        padding: 20px;
-        min-height: 100vh;
+        height: 100%;
+      }
+      body {
+        margin: 0;
+        font-family:
+          system-ui,
+          -apple-system,
+          Segoe UI,
+          Roboto,
+          Inter,
+          Arial,
+          sans-serif;
+        color: var(--ink);
+        background: var(--bg);
       }
 
+      /* Layout */
       .container {
         max-width: 1200px;
         margin: 0 auto;
+        padding: 24px;
         display: grid;
-        gap: 20px;
         grid-template-columns: 1fr;
+        gap: 28px;
       }
-
-      h1 {
-        text-align: center;
-        font-size: clamp(1.5rem, 5vw, 2.5rem);
-      }
-
-      canvas {
-        width: 100%;
-        max-width: 800px;
-        height: 60vh;
-        border: 2px solid #333;
-        background: white;
-        margin: 0 auto;
-        display: block;
-      }
-
-      .button-group {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 10px;
-        margin-top: 20px;
-      }
-
-      button {
-        padding: 12px 24px;
-        font-size: 16px;
-        border: 2px solid #333;
-        background: white;
-        cursor: pointer;
-        width: 200px;
-      }
-
-      .info {
-        background: white;
-        padding: 20px;
-        border-radius: 8px;
-        line-height: 1.6;
-      }
-
-      /* Desktop: side-by-side layout */
-      @media (min-width: 768px) {
+      @media (min-width: 900px) {
         .container {
           grid-template-columns: 2fr 1fr;
           align-items: start;
         }
+      }
 
-        .main {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-        }
+      .main {
+        display: grid;
+        gap: var(--gap);
+      }
 
+      /* Header */
+      .header {
+        text-align: center;
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 16px 14px;
+        box-shadow: var(--shadow);
+      }
+      .header h1 {
+        margin: 0 0 6px 0;
+        font-size: clamp(1.4rem, 4.5vw, 2.2rem);
+        font-weight: 700;
+        letter-spacing: -0.015em;
+      }
+      .header p {
+        margin: 0;
+        color: var(--ink-soft);
+        font-size: clamp(0.95rem, 2.5vw, 1.05rem);
+      }
+
+      /* Canvas */
+      .stage {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 12px;
+        box-shadow: var(--shadow);
+      }
+      canvas {
+        display: block;
+        width: 100%;
+        max-width: 900px;
+        margin: 0 auto;
+        background: #fff;
+        border: 2px solid var(--ring);
+        border-radius: 10px;
+        /* Keep a reasonable aspect on mobile, taller on desktop */
+        aspect-ratio: 16 / 10;
+      }
+      @media (min-width: 900px) {
         canvas {
+          aspect-ratio: 16 / 9;
+        }
+      }
+
+      /* Controls */
+      .controls {
+        display: grid;
+        gap: 14px;
+        justify-items: center;
+      }
+
+      /* Buttons grid (mobile small) */
+      .button-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        width: 100%;
+        max-width: 360px;
+      }
+      @media (min-width: 520px) and (max-width: 899px) {
+        .button-grid {
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          max-width: 560px;
+        }
+      }
+      @media (min-width: 900px) {
+        /* Desktop: row of buttons under sim */
+        .button-grid {
+          display: flex;
+          gap: 12px;
+          justify-content: flex-start;
+          max-width: none;
           width: 100%;
-          height: 70vh;
         }
+      }
 
-        .button-group {
-          flex-direction: row;
-          justify-content: center;
-        }
+      button {
+        appearance: none;
+        -webkit-appearance: none;
+        border: 1.5px solid var(--ring);
+        background: #fff;
+        color: var(--ink);
+        border-radius: 10px;
+        padding: 10px 12px;
+        font-size: 0.98rem;
+        font-weight: 600;
+        letter-spacing: 0.01em;
+        cursor: pointer;
+        transition:
+          transform 0.06s ease,
+          background 0.15s ease,
+          border-color 0.15s ease;
+      }
+      button:focus-visible {
+        outline: 2px solid #5a80ff;
+        outline-offset: 2px;
+      }
+      button:hover {
+        background: #f6f6f6;
+        border-color: #444;
+      }
+      button:active {
+        transform: translateY(1px);
+      }
 
+      @media (max-width: 520px) {
         button {
-          width: auto;
-          min-width: 150px;
+          font-size: 0.94rem;
+          padding: 9px 10px;
         }
+      }
+      @media (min-width: 900px) {
+        button {
+          min-width: 140px;
+        }
+      }
+
+      /* Sliders */
+      .slider {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 10px 12px;
+        box-shadow: var(--shadow);
+        width: max-content;
+        margin: 0 auto;
+      }
+      @media (min-width: 900px) {
+        .slider {
+          margin: 0;
+        }
+      }
+
+      .slider label {
+        font-size: 0.95rem;
+        color: var(--ink-soft);
+      }
+      .slider input[type="range"] {
+        width: 140px;
+        accent-color: var(--ring);
+      }
+      .slider .value {
+        min-width: 30px;
+        text-align: center;
+        font-weight: 700;
+      }
+
+      /* Info card (right on desktop, below on mobile) */
+      .info {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 18px;
+        line-height: 1.65;
+        box-shadow: var(--shadow);
+        font-size: 1rem;
+      }
+      .info h3,
+      .info h4 {
+        margin: 14px 0 8px 0;
+        font-size: 1.05rem;
+      }
+      .info p {
+        margin: 8px 0;
+        color: var(--ink-soft);
+      }
+      .info a {
+        color: #2f6ce5;
+        text-decoration: underline;
+        text-underline-offset: 2px;
       }
     </style>
   </head>
   <body>
     <div class="container">
-      <div class="main">
-        <h1>Conway's Game of Life</h1>
-        <canvas id="canvas"></canvas>
-        <div class="button-group">
-          <button id="playPause" onclick="window.playPause()">
-            Play / Pause
-          </button>
-          <button id="stepForward" onclick="window.stepForward()">
-            Step Forward
-          </button>
-          <button id="randomiseState" onclick="window.randomiseState()">
-            Shuffle!
-          </button>
-        </div>
-        <div class="slider-group">
-          <label for="fpsSlider"> Frames Per Second: </label>
-          <input
-            type="range"
-            id="fpsSlider"
-            min="1"
-            max="60"
-            step="1"
-            value="20"
-            oninput="window.updateFps(this.value)"
-          />
-          <span id="fpsValue">20</span>
-        </div>
-      </div>
+      <!-- Left: header, stage, controls -->
+      <section class="main">
+        <header class="header">
+          <h1>Conway's Game of Life</h1>
+          <p>
+            Click and drag on the grid to paint. Press Play to start the
+            simulation.
+          </p>
+        </header>
 
-      <div class="info">
-        <h3>Click and drag on the game to paint!</h3>
+        <div class="stage">
+          <canvas id="canvas"></canvas>
+        </div>
+
+        <div class="controls">
+          <div class="button-grid">
+            <button id="playPause" onclick="window.playPause()">
+              Play / Pause
+            </button>
+            <button id="stepForward" onclick="window.stepForward()">
+              Step Forward
+            </button>
+            <button id="randomiseState" onclick="window.randomiseState()">
+              Shuffle
+            </button>
+            <button id="resetState" onclick="window.resetState()">Reset</button>
+          </div>
+
+          <div class="slider">
+            <label for="fpsSlider">FPS</label>
+            <input
+              type="range"
+              id="fpsSlider"
+              min="1"
+              max="60"
+              step="1"
+              value="20"
+              oninput="window.updateFps(this.value); document.getElementById('fpsValue').textContent=this.value"
+            />
+            <span id="fpsValue" class="value">20</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right: info card -->
+      <aside class="info">
         <p>
-          Conway's game of life is a 2D cellular automata where at each
-          iteration a set of rules decides whether a cell lives / dies / stays
-          alive.
+          Conway's Game of Life is a 2D cellular automaton where simple rules
+          determine whether cells live or die each step.
           <a href="https://en.wikipedia.org/wiki/Conway%27s_Game_of_Life"
-            >Explanation.</a
-          >
-          Please make suggestions / feature requests
-          <a href="https://github.com/abroy77/game-of-life-wgpu/issues">here</a
-          >!
+            >Learn more</a
+          >. Suggestions or feature requests?
+          <a href="https://github.com/abroy77/game-of-life-wgpu/issues"
+            >Open an issue</a
+          >.
         </p>
-        <h4>Troubleshooting:</h4>
+
+        <h4>Troubleshooting</h4>
         <p>
-          Requires WebGPU to be enabled. You may need to install the latest
-          version of chrome / safari / firefox to view this.
+          WebGPU must be enabled. Use a recent version of Chrome, Safari, or
+          Firefox.
         </p>
-        <h4>iOS:</h4>
+
+        <h4>iOS</h4>
         <p>
-          Go to Safari > Settings > Apps > Safari > Advanced > Feature Flags >
-          enable webgpu > True. This should allow the simulation to run.
+          Safari → Settings → Apps → Safari → Advanced → Feature Flags → enable
+          “WebGPU”.
         </p>
-        <h4>Implementation details</h4>
+
+        <h4>Implementation</h4>
         <p>
-          This was written in Rust using winit and wgpu. It runs on your
-          device's gpu which allows it to be performant and efficent.
+          Built in Rust using winit and wgpu to leverage your GPU for
+          performance and efficiency.
         </p>
-      </div>
+      </aside>
     </div>
+
     <script type="module" src="./index.js"></script>
   </body>
 </html>

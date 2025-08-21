@@ -67,7 +67,7 @@ impl From<RawConfig> for AppConfig {
             gap_size,
             compute_dispatches,
             window_size: value.window_size,
-            is_paused: false,
+            is_paused: true,
             background_color: value.background_color,
             cursor_color: value.cursor_color,
         }

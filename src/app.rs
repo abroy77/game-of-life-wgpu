@@ -6,7 +6,7 @@ use crate::{
     render_data::RenderData,
 };
 
-use log::info;
+// use log::info;
 use std::cmp;
 use std::sync::Arc;
 use winit::{
@@ -28,6 +28,7 @@ use {
 
 #[cfg(target_arch = "wasm32")]
 use {
+    crate::graphics::{get_html_canvas, set_canvas_size},
     std::sync::Mutex,
     wasm_bindgen::prelude::*,
     web_time::{Duration, Instant},
@@ -39,6 +40,7 @@ pub enum AppEvents {
     PlayPause,
     UpdateFps(usize),
     RandomiseState,
+    ResetState,
     StepForward,
     UpdateRows(usize),
     UpdateCols(usize),
@@ -138,6 +140,30 @@ impl App {
             gc.request_redraw();
         }
     }
+    fn reset_state(&mut self) {
+        if let (Some(game_data), Some(graphics_context), Some(render_data)) = (
+            &mut self.game_data,
+            &mut self.graphics_context,
+            &mut self.render_data,
+        ) {
+            game_data.reset_grid_state(&self.config, &graphics_context.queue);
+            game_data.is_a_current = true;
+            match graphics_context.render(
+                render_data,
+                game_data.get_current_render_bind_group(),
+                &self.config,
+            ) {
+                Ok(_) => {}
+                Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
+                    let (width, height) = graphics_context.get_size().unwrap();
+                    graphics_context.resize(width, height);
+                }
+                Err(e) => {
+                    log::error!("Unable to render {e}");
+                }
+            }
+        }
+    }
 
     fn randomise_state(&mut self) {
         if let (Some(game_data), Some(graphics_context), Some(render_data)) = (
@@ -168,6 +194,7 @@ impl App {
             (KeyCode::Escape, true) => event_loop.exit(),
             (KeyCode::Space, true) => self.play_pause(),
             (KeyCode::ArrowRight, true) => self.step_forward(),
+            (KeyCode::KeyR, true) => self.reset_state(),
             (_, _) => (),
         }
     }
@@ -274,6 +301,7 @@ impl ApplicationHandler<AppEvents> for App {
             AppEvents::UpdateFps(new_fps) => self.update_fps(new_fps),
             AppEvents::StepForward => self.step_forward(),
             AppEvents::RandomiseState => self.randomise_state(),
+            AppEvents::ResetState => self.reset_state(),
             _ => todo!(),
         }
     }
@@ -295,9 +323,14 @@ impl ApplicationHandler<AppEvents> for App {
             WindowEvent::Resized(size) => {
                 graphics_context.resize(size.width, size.height);
                 mouse.configure(&graphics_context.window, &self.config);
-                info!("resized to {}, {}", size.width, size.height);
                 #[cfg(not(target_arch = "wasm32"))]
                 self.reset_cursor(event_loop);
+                #[cfg(target_arch = "wasm32")]
+                {
+                    // we need to set the size via the canvas
+                    let mut canvas = get_html_canvas();
+                    set_canvas_size(&mut canvas);
+                }
             }
             WindowEvent::ScaleFactorChanged {
                 scale_factor: _,
@@ -356,7 +389,7 @@ impl ApplicationHandler<AppEvents> for App {
             } => {
                 // we only want to add positions to the buffer if in grid and pressed
                 if mouse.is_pressed && mouse.in_grid {
-                    mouse.pos = phys_pos;
+                    mouse.pos = phys_pos.to_logical(graphics_context.window.scale_factor());
                     mouse.add_to_buffer(&self.config);
                 }
             }

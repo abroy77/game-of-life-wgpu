@@ -58,3 +58,14 @@ pub fn update_fps(new_fps: usize) {
         }
     })
 }
+
+#[wasm_bindgen(js_name = "resetState")]
+pub fn reset_state() {
+    EVENT_LOOP_PROXY.with(|proxy| {
+        if let Ok(guard) = proxy.lock() {
+            if let Some(proxy) = &*guard {
+                let _ = proxy.send_event(AppEvents::ResetState);
+            }
+        }
+    })
+}
