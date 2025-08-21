@@ -3,6 +3,7 @@ import init, {
   stepForward,
   randomiseState,
   updateFps,
+  resetState,
 } from "./pkg/game_of_life.js";
 
 async function run() {
@@ -22,6 +23,7 @@ async function run() {
   window.stepForward = stepForward;
   window.randomiseState = randomiseState;
   window.updateFps = updateFps;
+  window.resetState = resetState;
 }
 
 run();

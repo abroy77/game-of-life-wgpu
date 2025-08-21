@@ -195,7 +195,7 @@ impl GameData {
         );
     }
     pub fn reset_grid_state(&mut self, config: &AppConfig, queue: &wgpu::Queue) {
-        let new_state = vec![0 as u32; config.num_elements()];
+        let new_state = vec![0_u32; config.num_elements()];
         queue.write_buffer(
             &self.game_state_buffer_a,
             0,
