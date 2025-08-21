@@ -6,7 +6,7 @@ use crate::{
     render_data::RenderData,
 };
 
-use log::info;
+// use log::info;
 use std::cmp;
 use std::sync::Arc;
 use winit::{
@@ -28,6 +28,7 @@ use {
 
 #[cfg(target_arch = "wasm32")]
 use {
+    crate::graphics::{get_html_canvas, set_canvas_size},
     std::sync::Mutex,
     wasm_bindgen::prelude::*,
     web_time::{Duration, Instant},
@@ -295,9 +296,14 @@ impl ApplicationHandler<AppEvents> for App {
             WindowEvent::Resized(size) => {
                 graphics_context.resize(size.width, size.height);
                 mouse.configure(&graphics_context.window, &self.config);
-                info!("resized to {}, {}", size.width, size.height);
                 #[cfg(not(target_arch = "wasm32"))]
                 self.reset_cursor(event_loop);
+                #[cfg(target_arch = "wasm32")]
+                {
+                    // we need to set the size via the canvas
+                    let mut canvas = get_html_canvas();
+                    set_canvas_size(&mut canvas);
+                }
             }
             WindowEvent::ScaleFactorChanged {
                 scale_factor: _,
@@ -356,7 +362,7 @@ impl ApplicationHandler<AppEvents> for App {
             } => {
                 // we only want to add positions to the buffer if in grid and pressed
                 if mouse.is_pressed && mouse.in_grid {
-                    mouse.pos = phys_pos;
+                    mouse.pos = phys_pos.to_logical(graphics_context.window.scale_factor());
                     mouse.add_to_buffer(&self.config);
                 }
             }

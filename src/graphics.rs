@@ -2,9 +2,16 @@ use crate::{
     config::AppConfig, game_data::GameData, paint::MousePainter, render_data::RenderData,
     vertex::INDICES,
 };
+// use log::info;
 use std::sync::Arc;
 #[cfg(target_arch = "wasm32")]
-use winit::window::WindowAttributes;
+use {
+    // JsCast brings trait to cast rust dtypes to js safely or unsafely
+    wasm_bindgen::{JsCast, UnwrapThrowExt},
+    // allows winit to inceract with web elements
+    winit::{platform::web::WindowAttributesExtWebSys, window::WindowAttributes},
+};
+
 use winit::{event_loop::ActiveEventLoop, window::Window};
 
 pub struct GraphicsContext {
@@ -377,18 +384,15 @@ pub fn get_window(event_loop: &ActiveEventLoop) -> Arc<Window> {
     }
     // a winit window requires a an event loop to create it
     // we use Arc to have multiple references to this window
-    Arc::new(event_loop.create_window(window_attributes).unwrap())
+    let window = event_loop.create_window(window_attributes).unwrap();
+    Arc::new(window)
 }
 
 ///This function is only for the web to revrieve the
 /// HTML canvas on which we will draw
-#[cfg(target_arch = "wasm32")]
-fn setup_window_with_canvas(window_attributes: WindowAttributes) -> WindowAttributes {
-    // JsCast brings trait to cast rust dtypes to js safely or unsafely
-    use wasm_bindgen::{JsCast, UnwrapThrowExt};
-    // allows winit to inceract with web elements
-    use winit::platform::web::WindowAttributesExtWebSys;
 
+#[cfg(target_arch = "wasm32")]
+pub fn get_html_canvas() -> web_sys::HtmlCanvasElement {
     // get the browser window
     let window = wgpu::web_sys::window().unwrap_throw();
     // get the DOM in the window
@@ -399,8 +403,28 @@ fn setup_window_with_canvas(window_attributes: WindowAttributes) -> WindowAttrib
     let canvas = document.get_element_by_id("canvas").unwrap_throw();
 
     // Cast to HtmlCanvasElement specifically
-    let html_canvas: wgpu::web_sys::HtmlCanvasElement = canvas.dyn_into().unwrap_throw();
+    canvas.dyn_into().unwrap_throw()
+}
+
+#[cfg(target_arch = "wasm32")]
+pub fn set_canvas_size(canvas: &mut web_sys::HtmlCanvasElement) {
+    let width = canvas.client_width();
+    let height = canvas.client_height();
+    // let width = width;
+    // let height = height;
+    canvas.set_width(width as u32);
+    canvas.set_height(height as u32);
+
+    // canvas.set_width(500);
+    // canvas.set_height(500);
+}
+
+#[cfg(target_arch = "wasm32")]
+fn setup_window_with_canvas(window_attributes: WindowAttributes) -> WindowAttributes {
+    let mut canvas = get_html_canvas();
+    // set up the dimensions correctly
+    set_canvas_size(&mut canvas);
 
     // attach the canvas to the window attributes for window creation
-    window_attributes.with_canvas(Some(html_canvas))
+    window_attributes.with_canvas(Some(canvas))
 }

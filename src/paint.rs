@@ -1,7 +1,7 @@
-use log::info;
+// use log::info;
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
-use winit::dpi::PhysicalPosition;
+use winit::dpi::LogicalPosition;
 use winit::window::Window;
 
 use crate::config::AppConfig;
@@ -11,19 +11,18 @@ use crate::config::AppConfig;
 pub struct MousePainter {
     pub in_grid: bool,
     pub is_pressed: bool,
-    pub pos: PhysicalPosition<f64>,
+    pub pos: LogicalPosition<f64>,
     pub paint_buffer_cpu: Vec<u32>,
     pub paint_buffer_gpu: wgpu::Buffer,
-    pub array_div_factor: (usize, usize),
+    pub array_div_factor: (f32, f32),
     pub painter_pipeline: wgpu::ComputePipeline,
     pub painter_buffer_bind_group: wgpu::BindGroup,
-    pub scale_factor: f64,
 }
 
 fn get_window_logical_size(window: &Arc<Window>) -> (f32, f32) {
-    // let log = window.inner_size().to_logical(window.scale_factor());
-    let log = window.inner_size();
-    let (x, y) = (log.width as f32, log.height as f32);
+    let log = window.inner_size().to_logical::<f32>(window.scale_factor());
+    // let log = window.inner_size();
+    let (x, y) = (log.width, log.height);
     (x, y)
 }
 impl MousePainter {
@@ -36,13 +35,7 @@ impl MousePainter {
         config: &AppConfig,
         window: Arc<Window>,
     ) -> Self {
-        let window_size = get_window_logical_size(&window);
-        info!("new mousey size {} {}", window_size.0, window_size.1);
-        let array_div_factor = (
-            window_size.0 as usize / config.cols,
-            window_size.1 as usize / config.rows,
-        );
-        let scale_factor = window.scale_factor();
+        let array_div_factor = MousePainter::calc_array_div_factor(&window, config);
         // so here we don't need a premade buffer. we will make it on the fly from our slice.
         // do we need a buffer layout? nah
         // we do need a bind group so we can bind 2 things in our paint shader
@@ -116,24 +109,23 @@ impl MousePainter {
         Self {
             in_grid: false,
             is_pressed: false,
-            pos: PhysicalPosition { x: 0.0, y: 0.0 },
+            pos: LogicalPosition { x: 0.0, y: 0.0 },
             paint_buffer_cpu: paint_buffer,
             paint_buffer_gpu: painter_buffer_gpu,
             array_div_factor,
             painter_pipeline,
             painter_buffer_bind_group,
-            scale_factor,
         }
     }
     // set the cell array position to 1
     pub fn add_to_buffer(&mut self, config: &AppConfig) {
         // we need to convert the physical coords into the array index for the cell
         let (div_x, div_y) = self.array_div_factor;
-        let x = self.pos.x.round() as usize / div_x;
+        let x = (self.pos.x as f32 / div_x) as usize;
         // we do this because NDC is from down to up in y.
         // but the window coordinates are top to bottom
         // need to do a checked subtraction to prevent overflow issues
-        let y = (config.rows - 1).checked_sub(self.pos.y.round() as usize / div_y);
+        let y = (config.rows - 1).checked_sub((self.pos.y as f32 / div_y) as usize);
         if let Some(y) = y {
             // now get the array_pos:
             let array_pos = x + config.cols * y;
@@ -145,12 +137,15 @@ impl MousePainter {
     pub fn clear_buffer(&mut self) {
         self.paint_buffer_cpu.iter_mut().for_each(|x| *x = 0);
     }
-    pub fn configure(&mut self, window: &Arc<Window>, config: &AppConfig) {
+    pub fn calc_array_div_factor(window: &Arc<Window>, config: &AppConfig) -> (f32, f32) {
         let window_size = get_window_logical_size(window);
-        self.array_div_factor = (
-            window_size.0 as usize / config.cols,
-            window_size.1 as usize / config.rows,
-        );
+        (
+            window_size.0 / config.cols as f32,
+            window_size.1 / config.rows as f32,
+        )
+    }
+    pub fn configure(&mut self, window: &Arc<Window>, config: &AppConfig) {
+        self.array_div_factor = MousePainter::calc_array_div_factor(window, config);
     }
     // configure the buffer size and the div factor when we resize the window
     // or change num elements.
