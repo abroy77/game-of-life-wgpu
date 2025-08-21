@@ -37,13 +37,9 @@ impl ComputeUniform {
 
 impl GameData {
     pub fn new(device: &wgpu::Device, config: &AppConfig) -> Self {
-        let mut rng = rng();
+        let rng = rng();
 
-        let current_state = random_state(
-            &mut rng,
-            config.num_elements() as u32,
-            config.init_rand_threshold,
-        );
+        let current_state = vec![0_u32; config.num_elements()];
         let next_state = current_state.clone();
 
         let game_state_buffer_a = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -196,16 +192,7 @@ impl GameData {
     }
     pub fn reset_grid_state(&mut self, config: &AppConfig, queue: &wgpu::Queue) {
         let new_state = vec![0_u32; config.num_elements()];
-        queue.write_buffer(
-            &self.game_state_buffer_a,
-            0,
-            bytemuck::cast_slice(&new_state),
-        );
-        queue.write_buffer(
-            &self.game_state_buffer_b,
-            0,
-            bytemuck::cast_slice(&new_state),
-        );
+        self.update_grid_state(&new_state, queue);
     }
     pub fn randomise_grid_state(&mut self, config: &AppConfig, queue: &wgpu::Queue) {
         let new_state = random_state(
@@ -213,16 +200,7 @@ impl GameData {
             config.num_elements() as u32,
             config.init_rand_threshold,
         );
-        queue.write_buffer(
-            &self.game_state_buffer_a,
-            0,
-            bytemuck::cast_slice(&new_state),
-        );
-        queue.write_buffer(
-            &self.game_state_buffer_b,
-            0,
-            bytemuck::cast_slice(&new_state),
-        );
+        self.update_grid_state(&new_state, queue);
     }
 
     pub fn get_compute_uniform_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
