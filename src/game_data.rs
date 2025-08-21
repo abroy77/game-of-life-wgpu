@@ -194,6 +194,19 @@ impl GameData {
             bytemuck::cast_slice(new_state),
         );
     }
+    pub fn reset_grid_state(&mut self, config: &AppConfig, queue: &wgpu::Queue) {
+        let new_state = vec![0 as u32; config.num_elements()];
+        queue.write_buffer(
+            &self.game_state_buffer_a,
+            0,
+            bytemuck::cast_slice(&new_state),
+        );
+        queue.write_buffer(
+            &self.game_state_buffer_b,
+            0,
+            bytemuck::cast_slice(&new_state),
+        );
+    }
     pub fn randomise_grid_state(&mut self, config: &AppConfig, queue: &wgpu::Queue) {
         let new_state = random_state(
             &mut self.rng,
