@@ -17,6 +17,7 @@ pub struct MousePainter {
     pub array_div_factor: (f32, f32),
     pub painter_pipeline: wgpu::ComputePipeline,
     pub painter_buffer_bind_group: wgpu::BindGroup,
+    pub finger_id: Option<u64>,
 }
 
 fn get_window_logical_size(window: &Arc<Window>) -> (f32, f32) {
@@ -106,6 +107,8 @@ impl MousePainter {
             compilation_options: wgpu::PipelineCompilationOptions::default(),
         });
 
+        let finger_id = None;
+
         Self {
             in_grid: false,
             is_pressed: false,
@@ -115,6 +118,7 @@ impl MousePainter {
             array_div_factor,
             painter_pipeline,
             painter_buffer_bind_group,
+            finger_id,
         }
     }
     // set the cell array position to 1

@@ -11,7 +11,7 @@ use std::cmp;
 use std::sync::Arc;
 use winit::{
     application::ApplicationHandler,
-    event::{ElementState, KeyEvent, MouseButton, WindowEvent},
+    event::{ElementState, KeyEvent, MouseButton, Touch, TouchPhase, WindowEvent},
     event_loop::{ActiveEventLoop, EventLoop},
     keyboard::{KeyCode, PhysicalKey},
     window::Window,
@@ -412,14 +412,61 @@ impl ApplicationHandler<AppEvents> for App {
                 button: MouseButton::Left,
             } => {
                 mouse.is_pressed = true;
+                mouse.add_to_buffer(&self.config);
             }
             WindowEvent::CursorMoved {
                 device_id: _,
                 position: phys_pos,
             } => {
                 // we only want to add positions to the buffer if in grid and pressed
-                if mouse.is_pressed && mouse.in_grid {
+                if mouse.in_grid {
                     mouse.pos = phys_pos.to_logical(graphics_context.window.scale_factor());
+                    if mouse.is_pressed {
+                        mouse.add_to_buffer(&self.config);
+                    }
+                }
+            }
+            // Touch events
+            WindowEvent::Touch(Touch {
+                phase: TouchPhase::Started,
+                location,
+                id: finger_id,
+                ..
+            }) => {
+                if !mouse.is_pressed {
+                    // if we're not already pressing somewhere else, then we register this finger
+                    mouse.finger_id = Some(finger_id);
+                    mouse.pos = location.to_logical(graphics_context.window.scale_factor());
+                    mouse.is_pressed = true;
+                    mouse.in_grid = true;
+                }
+            }
+            WindowEvent::Touch(Touch {
+                phase: TouchPhase::Ended,
+                id: finger_id,
+                ..
+            }) => {
+                // if we get a touch phase ended event for the registered id, we say we're not pressing anymore
+                if let Some(mouse_finger_id) = mouse.finger_id
+                    && mouse_finger_id == finger_id
+                {
+                    mouse.finger_id = None;
+                    mouse.is_pressed = false;
+                    mouse.in_grid = false;
+                }
+            }
+            WindowEvent::Touch(Touch {
+                phase: TouchPhase::Moved,
+                id: finger_id,
+                location,
+                ..
+            }) => {
+                if let Some(mouse_finger_id) = mouse.finger_id
+                    && mouse_finger_id == finger_id
+                    && mouse.is_pressed
+                    && mouse.in_grid
+                {
+                    mouse.pos = location.to_logical(graphics_context.window.scale_factor());
                     mouse.add_to_buffer(&self.config);
                 }
             }
