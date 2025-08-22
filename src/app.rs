@@ -134,11 +134,11 @@ impl App {
     #[cfg(target_arch = "wasm32")]
     fn update_play_pause_ui(&self) {
         use wasm_bindgen::UnwrapThrowExt;
-        
+
         let window = web_sys::window().unwrap_throw();
         let document = window.document().unwrap_throw();
         let button = document.get_element_by_id("playPause").unwrap_throw();
-        
+
         if self.config.is_paused {
             // Simulation is paused - show red (paused state)
             button.set_attribute("class", "paused").unwrap_throw();
@@ -252,7 +252,7 @@ impl App {
                 graphics_context.window.clone(),
             ));
             println!("got the gc set up and all");
-            
+
             // Initialize the play/pause button UI state
             self.update_play_pause_ui();
         }
