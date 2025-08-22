@@ -11,6 +11,8 @@ pub fn play_pause() {
         if let Ok(guard) = proxy.lock() {
             if let Some(proxy) = &*guard {
                 let _ = proxy.send_event(AppEvents::PlayPause);
+                // Schedule UI update after the state change
+                let _ = proxy.send_event(AppEvents::UpdatePlayPauseUI);
             }
         }
     })

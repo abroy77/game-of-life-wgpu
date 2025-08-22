@@ -31,6 +31,7 @@ use {
     crate::graphics::{get_html_canvas, set_canvas_size},
     std::sync::Mutex,
     wasm_bindgen::prelude::*,
+    web_sys,
     web_time::{Duration, Instant},
     winit::event_loop::EventLoopProxy,
 };
@@ -44,6 +45,7 @@ pub enum AppEvents {
     StepForward,
     UpdateRows(usize),
     UpdateCols(usize),
+    UpdatePlayPauseUI,
 }
 
 // use std::sync::Mutex;
@@ -127,6 +129,30 @@ impl App {
         // set limits on fps to be within 0 and 60. clip the values at those limits
         self.config.frame_duration = Duration::from_millis((1000 / new_fps.clamp(1, 60)) as u64);
         self.next_frame = Instant::now() + self.config.frame_duration;
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    fn update_play_pause_ui(&self) {
+        use wasm_bindgen::UnwrapThrowExt;
+
+        let window = web_sys::window().unwrap_throw();
+        let document = window.document().unwrap_throw();
+        let button = document.get_element_by_id("playPause").unwrap_throw();
+
+        if self.config.is_paused {
+            // Simulation is paused - show red (paused state)
+            button.set_attribute("class", "paused").unwrap_throw();
+            button.set_text_content(Some("▶ Play"));
+        } else {
+            // Simulation is playing - show green (playing state)
+            button.set_attribute("class", "playing").unwrap_throw();
+            button.set_text_content(Some("⏸ Pause"));
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn update_play_pause_ui(&self) {
+        // No-op for desktop version
     }
 
     fn step_forward(&mut self) {
@@ -226,6 +252,9 @@ impl App {
                 graphics_context.window.clone(),
             ));
             println!("got the gc set up and all");
+
+            // Initialize the play/pause button UI state
+            self.update_play_pause_ui();
         }
     }
     #[cfg(not(target_arch = "wasm32"))]
@@ -302,6 +331,7 @@ impl ApplicationHandler<AppEvents> for App {
             AppEvents::StepForward => self.step_forward(),
             AppEvents::RandomiseState => self.randomise_state(),
             AppEvents::ResetState => self.reset_state(),
+            AppEvents::UpdatePlayPauseUI => self.update_play_pause_ui(),
             _ => todo!(),
         }
     }
