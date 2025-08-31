@@ -154,12 +154,10 @@ impl MousePainter {
     }
     pub fn calc_array_div_factor(window: &Arc<Window>, config: &AppConfig) -> (f32, f32) {
         let window_size = get_window_logical_size(window);
-        let div_factor = (
+        (
             window_size.0 / config.cols as f32,
             window_size.1 / config.rows as f32,
-        );
-
-        div_factor
+        )
     }
     pub fn configure(&mut self, window: &Arc<Window>, config: &AppConfig) {
         self.array_div_factor = MousePainter::calc_array_div_factor(window, config);
