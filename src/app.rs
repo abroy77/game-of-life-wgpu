@@ -326,7 +326,13 @@ impl ApplicationHandler<AppEvents> for App {
             }
             AppEvents::PlayPause => self.play_pause(),
             AppEvents::UpdateFps(new_fps) => self.update_fps(new_fps),
-            AppEvents::StepForward => self.step_forward(),
+            AppEvents::StepForward => {
+                if !self.config.is_paused {
+                    self.play_pause();
+                    self.update_play_pause_ui();
+                }
+                self.step_forward()
+            }
             AppEvents::RandomiseState => self.randomise_state(),
             AppEvents::ResetState => self.reset_state(),
             AppEvents::UpdatePlayPauseUI => self.update_play_pause_ui(),
