@@ -4,6 +4,8 @@ use crate::{
 };
 // use log::info;
 use std::sync::Arc;
+#[cfg(not(target_arch = "wasm32"))]
+use winit::dpi::PhysicalSize;
 #[cfg(target_arch = "wasm32")]
 use {
     // JsCast brings trait to cast rust dtypes to js safely or unsafely
@@ -25,17 +27,15 @@ pub struct GraphicsContext {
 #[repr(C, align(16))]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct RenderUniform {
-    pub cell_size: f32,
-    pub _pad: [f32; 3],
-    pub _pad_more: [f32; 4],
+    pub cell_size: [f32; 2],
+    pub _pad: [f32; 2],
 }
 
 impl RenderUniform {
-    pub fn new(cell_size: f32) -> Self {
+    pub fn new(cell_size: (f32, f32)) -> Self {
         Self {
-            cell_size,
-            _pad: [0.0; 3],
-            _pad_more: [0.0; 4],
+            cell_size: [cell_size.0, cell_size.1],
+            _pad: [0.0; 2],
         }
     }
 }
@@ -254,12 +254,7 @@ impl GraphicsContext {
                 ops: wgpu::Operations {
                     // operations we're performing on that view
                     // LOAD: load the clear color onto each element of the view
-                    load: wgpu::LoadOp::Clear(wgpu::Color {
-                        r: 0.1,
-                        g: 0.2,
-                        b: 0.3,
-                        a: 1.0,
-                    }),
+                    load: wgpu::LoadOp::Clear(config.background_color),
                     // STORE: keep the data so it's seen on the screen
                     store: wgpu::StoreOp::Store,
                 },
@@ -379,9 +374,16 @@ pub fn get_window(event_loop: &ActiveEventLoop) -> Arc<Window> {
 
     #[cfg(target_arch = "wasm32")]
     {
-        // here is where we will attach the window to the HTML canvas on the web
+        // For WASM, set up with actual canvas dimensions
         window_attributes = setup_window_with_canvas(window_attributes);
     }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        // For native, use a reasonable default size
+        window_attributes = window_attributes.with_inner_size(PhysicalSize::new(800, 600));
+    }
+
     // a winit window requires a an event loop to create it
     // we use Arc to have multiple references to this window
     let window = event_loop.create_window(window_attributes).unwrap();
@@ -410,13 +412,11 @@ pub fn get_html_canvas() -> web_sys::HtmlCanvasElement {
 pub fn set_canvas_size(canvas: &mut web_sys::HtmlCanvasElement) {
     let width = canvas.client_width();
     let height = canvas.client_height();
-    // let width = width;
-    // let height = height;
-    canvas.set_width(width as u32);
-    canvas.set_height(height as u32);
+    log::info!("Canvas client dimensions: {}x{}", width, height);
 
-    // canvas.set_width(500);
-    // canvas.set_height(500);
+    // canvas.set_width(width as u32);
+    // canvas.set_height(height as u32);
+    // log::info!("Canvas internal dimensions set to: {}x{}", width, height);
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -425,6 +425,24 @@ fn setup_window_with_canvas(window_attributes: WindowAttributes) -> WindowAttrib
     // set up the dimensions correctly
     set_canvas_size(&mut canvas);
 
-    // attach the canvas to the window attributes for window creation
+    // Get the actual canvas dimensions and convert to logical size
+    // log::info!("setup window with canvas:\n {}x{}", physical_width, physical_height);
+
+    // Get device pixel ratio to convert to logical size
+    // let window = web_sys::window().unwrap();
+    // let device_pixel_ratio = window.device_pixel_ratio();
+
+    // let logical_width = physical_width as f64 / device_pixel_ratio;
+    // let logical_height = physical_height as f64 / device_pixel_ratio;
+
+    // log::info!("Canvas dimensions - Physical: {}x{}, Device pixel ratio: {}, Logical: {}x{}",
+    //    physical_width, physical_height, device_pixel_ratio, logical_width, logical_height);
+    // log::info!("Canvas dimensions setting to {}x{}", physical_width, physical_height);
+
+    // attach the canvas to the window attributes for window creation using logical size
     window_attributes.with_canvas(Some(canvas))
+    // .with_inner_size(winit::dpi::PhysicalSize::new(
+    //     physical_width,
+    //     physical_height,
+    // ))
 }

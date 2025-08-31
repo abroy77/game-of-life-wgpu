@@ -6,7 +6,7 @@ use crate::{
     render_data::RenderData,
 };
 
-// use log::info;
+use log::info;
 use std::cmp;
 use std::sync::Arc;
 use winit::{
@@ -228,7 +228,10 @@ impl App {
     fn setup_game_and_render_data(&mut self) {
         if let Some(graphics_context) = &self.graphics_context {
             let device = &graphics_context.device;
-
+            // use the graphics context to get the window dims which we will use to calculate the num
+            // of rows and columns of cells we want to start with
+            self.config
+                .update_cell_configuration(&graphics_context.window);
             self.game_data = Some(GameData::new(device, &self.config));
             // now that the graphics context is setup we can setup the render_pipeline if it's not there already
             // setup the render stuff now that the window and surface configurations are made
@@ -266,8 +269,8 @@ impl App {
                 window_width as f32 / scale_factor,
                 window_height as f32 / scale_factor,
             );
-            let cursor_width = ((window_width * self.config.cell_size) / 2.0) as u16;
-            let cursor_height = ((window_height * self.config.cell_size) / 2.0) as u16;
+            let cursor_width = ((window_width * self.config.cell_size.0) / 2.0) as u16;
+            let cursor_height = ((window_height * self.config.cell_size.1) / 2.0) as u16;
 
             let rgba_buffer: Vec<u8> = repeat_n(
                 self.config.cursor_color,
@@ -351,6 +354,7 @@ impl ApplicationHandler<AppEvents> for App {
                 event_loop.exit();
             }
             WindowEvent::Resized(size) => {
+                info!("Resizing");
                 graphics_context.resize(size.width, size.height);
                 mouse.configure(&graphics_context.window, &self.config);
                 #[cfg(not(target_arch = "wasm32"))]
@@ -397,8 +401,14 @@ impl ApplicationHandler<AppEvents> for App {
                     },
                 ..
             } => self.handle_key(event_loop, code, state.is_pressed()),
-            WindowEvent::CursorEntered { device_id: _ } => mouse.in_grid = true,
-            WindowEvent::CursorLeft { device_id: _ } => mouse.in_grid = false,
+            WindowEvent::CursorEntered { device_id: _ } => {
+                mouse.in_grid = true;
+                log::info!("cursor entered");
+            }
+            WindowEvent::CursorLeft { device_id: _ } => {
+                mouse.in_grid = false;
+                log::info!("cursor left");
+            }
             WindowEvent::MouseInput {
                 device_id: _,
                 state: ElementState::Released,
@@ -420,7 +430,15 @@ impl ApplicationHandler<AppEvents> for App {
             } => {
                 // we only want to add positions to the buffer if in grid and pressed
                 if mouse.in_grid {
-                    mouse.pos = phys_pos.to_logical(graphics_context.window.scale_factor());
+                    let logical_pos = phys_pos.to_logical(graphics_context.window.scale_factor());
+                    // log::info!(
+                    //     "Mouse coordinates - Physical: {:?}, Logical: {:?}, Scale factor: {}",
+                    //     phys_pos,
+                    //     logical_pos,
+                    //     graphics_context.window.scale_factor()
+                    // );
+
+                    mouse.pos = logical_pos;
                     if mouse.is_pressed {
                         mouse.add_to_buffer(&self.config);
                     }
