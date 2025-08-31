@@ -5,8 +5,8 @@ struct VertexOutput {
 };
 
 struct RenderUniform {
-    cell_size: f32,
-    _pad: vec3<f32>,
+    cell_size: vec2<f32>,
+    _pad: vec2<f32>,
 };
 
 @group(0) @binding(0)

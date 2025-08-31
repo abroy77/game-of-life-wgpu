@@ -1,12 +1,9 @@
-// use log::info;
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
 use winit::dpi::LogicalPosition;
 use winit::window::Window;
 
 use crate::config::AppConfig;
-
-// const PAINTER_BUFFER_CLEAR_INTERVAL: Duration = Duration::from_millis(16); // 16 fps
 
 pub struct MousePainter {
     pub in_grid: bool,
@@ -21,8 +18,9 @@ pub struct MousePainter {
 }
 
 fn get_window_logical_size(window: &Arc<Window>) -> (f32, f32) {
-    let log = window.inner_size().to_logical::<f32>(window.scale_factor());
-    // let log = window.inner_size();
+    let physical_size = window.inner_size();
+    let scale_factor = window.scale_factor();
+    let log = physical_size.to_logical::<f32>(scale_factor);
     let (x, y) = (log.width, log.height);
     (x, y)
 }
@@ -126,16 +124,29 @@ impl MousePainter {
         // we need to convert the physical coords into the array index for the cell
         let (div_x, div_y) = self.array_div_factor;
         let x = (self.pos.x as f32 / div_x) as usize;
+        if x >= config.cols {
+            return;
+        }
         // we do this because NDC is from down to up in y.
         // but the window coordinates are top to bottom
         // need to do a checked subtraction to prevent overflow issues
         let y = (config.rows - 1).checked_sub((self.pos.y as f32 / div_y) as usize);
+
         if let Some(y) = y {
             // now get the array_pos:
             let array_pos = x + config.cols * y;
+
             if array_pos < self.paint_buffer_cpu.len() {
                 self.paint_buffer_cpu[array_pos] = 1;
+            } else {
+                log::warn!(
+                    "Paint position out of bounds: array_pos {} >= buffer_len {}",
+                    array_pos,
+                    self.paint_buffer_cpu.len()
+                );
             }
+        } else {
+            log::warn!("Invalid Y coordinate calculation");
         }
     }
     pub fn clear_buffer(&mut self) {

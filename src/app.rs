@@ -6,7 +6,6 @@ use crate::{
     render_data::RenderData,
 };
 
-// use log::info;
 use std::cmp;
 use std::sync::Arc;
 use winit::{
@@ -28,7 +27,6 @@ use {
 
 #[cfg(target_arch = "wasm32")]
 use {
-    crate::graphics::{get_html_canvas, set_canvas_size},
     std::sync::Mutex,
     wasm_bindgen::prelude::*,
     web_sys,
@@ -47,9 +45,6 @@ pub enum AppEvents {
     UpdateCols(usize),
     UpdatePlayPauseUI,
 }
-
-// use std::sync::Mutex;
-// use winit::event_loop::EventLoopProxy;
 
 // This thread local will allow us to send events from our JS functions to control
 // the state of the app
@@ -228,7 +223,10 @@ impl App {
     fn setup_game_and_render_data(&mut self) {
         if let Some(graphics_context) = &self.graphics_context {
             let device = &graphics_context.device;
-
+            // use the graphics context to get the window dims which we will use to calculate the num
+            // of rows and columns of cells we want to start with
+            self.config
+                .update_cell_configuration(&graphics_context.window);
             self.game_data = Some(GameData::new(device, &self.config));
             // now that the graphics context is setup we can setup the render_pipeline if it's not there already
             // setup the render stuff now that the window and surface configurations are made
@@ -266,8 +264,8 @@ impl App {
                 window_width as f32 / scale_factor,
                 window_height as f32 / scale_factor,
             );
-            let cursor_width = ((window_width * self.config.cell_size) / 2.0) as u16;
-            let cursor_height = ((window_height * self.config.cell_size) / 2.0) as u16;
+            let cursor_width = ((window_width * self.config.cell_size.0) / 2.0) as u16;
+            let cursor_height = ((window_height * self.config.cell_size.1) / 2.0) as u16;
 
             let rgba_buffer: Vec<u8> = repeat_n(
                 self.config.cursor_color,
@@ -355,12 +353,6 @@ impl ApplicationHandler<AppEvents> for App {
                 mouse.configure(&graphics_context.window, &self.config);
                 #[cfg(not(target_arch = "wasm32"))]
                 self.reset_cursor(event_loop);
-                #[cfg(target_arch = "wasm32")]
-                {
-                    // we need to set the size via the canvas
-                    let mut canvas = get_html_canvas();
-                    set_canvas_size(&mut canvas);
-                }
             }
             WindowEvent::ScaleFactorChanged {
                 scale_factor: _,
@@ -397,8 +389,12 @@ impl ApplicationHandler<AppEvents> for App {
                     },
                 ..
             } => self.handle_key(event_loop, code, state.is_pressed()),
-            WindowEvent::CursorEntered { device_id: _ } => mouse.in_grid = true,
-            WindowEvent::CursorLeft { device_id: _ } => mouse.in_grid = false,
+            WindowEvent::CursorEntered { device_id: _ } => {
+                mouse.in_grid = true;
+            }
+            WindowEvent::CursorLeft { device_id: _ } => {
+                mouse.in_grid = false;
+            }
             WindowEvent::MouseInput {
                 device_id: _,
                 state: ElementState::Released,
@@ -420,7 +416,9 @@ impl ApplicationHandler<AppEvents> for App {
             } => {
                 // we only want to add positions to the buffer if in grid and pressed
                 if mouse.in_grid {
-                    mouse.pos = phys_pos.to_logical(graphics_context.window.scale_factor());
+                    let logical_pos = phys_pos.to_logical(graphics_context.window.scale_factor());
+
+                    mouse.pos = logical_pos;
                     if mouse.is_pressed {
                         mouse.add_to_buffer(&self.config);
                     }

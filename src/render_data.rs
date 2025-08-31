@@ -6,8 +6,6 @@ use crate::{
     vertex::{CELL_VERTICES, INDICES, Instance, Vertex, get_instances},
 };
 
-// Stuff needed to render things on the screen
-
 pub struct RenderData {
     pub pipeline: wgpu::RenderPipeline,
     pub vertex_buffer: wgpu::Buffer,

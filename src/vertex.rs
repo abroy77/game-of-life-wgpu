@@ -25,12 +25,17 @@ pub const CELL_VERTICES: &[Vertex] = &[
     },
 ];
 
-pub fn get_instances(rows: usize, cols: usize, gap_size: f32, cell_size: f32) -> Vec<Instance> {
+pub fn get_instances(
+    rows: usize,
+    cols: usize,
+    gap_size: (f32, f32),
+    cell_size: (f32, f32),
+) -> Vec<Instance> {
     let mut result = Vec::with_capacity(rows * cols);
     for row in 0..rows {
         for col in 0..cols {
-            let x = -1.0 + gap_size + cell_size / 2.0 + col as f32 * (cell_size + gap_size);
-            let y = -1.0 + gap_size + cell_size / 2.0 + row as f32 * (cell_size + gap_size);
+            let x = -1.0 + gap_size.0 + cell_size.0 / 2.0 + col as f32 * (cell_size.0 + gap_size.0);
+            let y = -1.0 + gap_size.1 + cell_size.1 / 2.0 + row as f32 * (cell_size.1 + gap_size.1);
 
             result.push(Instance { position: [x, y] });
         }

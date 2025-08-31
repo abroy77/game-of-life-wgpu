@@ -1,8 +1,9 @@
 rows = 100
 cols = 100
+min_cell_array_len = 100
 gap_ratio = 0.15
 fps = 20
 paint_fps = 120
-init_rand_threshold = 0.5
+init_rand_threshold = 0.2
 background_color = [0,0,0,0]
 cursor_color = [255,0,0,255]

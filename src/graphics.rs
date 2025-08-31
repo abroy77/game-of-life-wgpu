@@ -2,8 +2,9 @@ use crate::{
     config::AppConfig, game_data::GameData, paint::MousePainter, render_data::RenderData,
     vertex::INDICES,
 };
-// use log::info;
 use std::sync::Arc;
+#[cfg(not(target_arch = "wasm32"))]
+use winit::dpi::PhysicalSize;
 #[cfg(target_arch = "wasm32")]
 use {
     // JsCast brings trait to cast rust dtypes to js safely or unsafely
@@ -25,17 +26,15 @@ pub struct GraphicsContext {
 #[repr(C, align(16))]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct RenderUniform {
-    pub cell_size: f32,
-    pub _pad: [f32; 3],
-    pub _pad_more: [f32; 4],
+    pub cell_size: [f32; 2],
+    pub _pad: [f32; 2],
 }
 
 impl RenderUniform {
-    pub fn new(cell_size: f32) -> Self {
+    pub fn new(cell_size: (f32, f32)) -> Self {
         Self {
-            cell_size,
-            _pad: [0.0; 3],
-            _pad_more: [0.0; 4],
+            cell_size: [cell_size.0, cell_size.1],
+            _pad: [0.0; 2],
         }
     }
 }
@@ -158,63 +157,9 @@ impl GraphicsContext {
                     config.compute_dispatches[1] as u32,
                     1,
                 );
-            } // using std::iter::once to make a simple iterable that yields
-            // a single item. This means I don't need to make a vec or array.
-            // let buffer_size =
-            //     (config.num_elements() * std::mem::size_of::<u32>()) as wgpu::BufferAddress;
-            // let staging_buffer_a = self.device.create_buffer(&wgpu::BufferDescriptor {
-            //     label: Some("Staging Buffer A"),
-            //     size: buffer_size,
-            //     usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-            //     mapped_at_creation: false,
-            // });
-            // encoder.copy_buffer_to_buffer(
-            //     &game_data.game_state_buffer_a,
-            //     0,
-            //     &staging_buffer_a,
-            //     0,
-            //     buffer_size,
-            // );
-            // let staging_buffer_b = self.device.create_buffer(&wgpu::BufferDescriptor {
-            //     label: Some("Staging Buffer B"),
-            //     size: buffer_size,
-            //     usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-            //     mapped_at_creation: false,
-            // });
-            // encoder.copy_buffer_to_buffer(
-            //     &game_data.game_state_buffer_b,
-            //     0,
-            //     &staging_buffer_b,
-            //     0,
-            //     buffer_size,
-            // );
+            }
+            // using std::iter::once to make a simple iterable that yields
             self.queue.submit(std::iter::once(encoder.finish()));
-
-            // let buffer_slice_a = staging_buffer_a.slice(..);
-            // buffer_slice_a.map_async(wgpu::MapMode::Read, |result| {
-            //     if result.is_ok() {
-            //     }
-            // });
-
-            // _ = self.device.poll(wgpu::PollType::Wait);
-            // let data = buffer_slice_a.get_mapped_range();
-            // let cells: &[u32] = bytemuck::cast_slice(&data);
-            // println!("Current Data A: {:?}", cells);
-            // drop(data);
-            // staging_buffer_a.unmap();
-
-            // let buffer_slice_b = staging_buffer_b.slice(..);
-            // buffer_slice_b.map_async(wgpu::MapMode::Read, |result| {
-            //     if result.is_ok() {
-            //     }
-            // });
-
-            // _ = self.device.poll(wgpu::PollType::Wait);
-            // let data = buffer_slice_b.get_mapped_range();
-            // let cells: &[u32] = bytemuck::cast_slice(&data);
-            // println!("Current Data B: {:?}", cells);
-            // drop(data);
-            // staging_buffer_b.unmap();
 
             game_data.swap_current();
         }
@@ -254,12 +199,7 @@ impl GraphicsContext {
                 ops: wgpu::Operations {
                     // operations we're performing on that view
                     // LOAD: load the clear color onto each element of the view
-                    load: wgpu::LoadOp::Clear(wgpu::Color {
-                        r: 0.1,
-                        g: 0.2,
-                        b: 0.3,
-                        a: 1.0,
-                    }),
+                    load: wgpu::LoadOp::Clear(config.background_color),
                     // STORE: keep the data so it's seen on the screen
                     store: wgpu::StoreOp::Store,
                 },
@@ -337,36 +277,8 @@ impl GraphicsContext {
                     config.compute_dispatches[1] as u32,
                     1,
                 );
-            } // using std::iter::once to make a simple iterable that yields
-            // a single item. This means I don't need to make a vec or array.
-            // let buffer_size =
-            //     (config.num_elements() * std::mem::size_of::<u32>()) as wgpu::BufferAddress;
-            // let staging_buffer_a = self.device.create_buffer(&wgpu::BufferDescriptor {
-            //     label: Some("Staging Buffer A"),
-            //     size: buffer_size,
-            //     usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-            //     mapped_at_creation: false,
-            // });
-            // encoder.copy_buffer_to_buffer(
-            //     &game_data.game_state_buffer_a,
-            //     0,
-            //     &staging_buffer_a,
-            //     0,
-            //     buffer_size,
-            // );
-            // let staging_buffer_b = self.device.create_buffer(&wgpu::BufferDescriptor {
-            //     label: Some("Staging Buffer B"),
-            //     size: buffer_size,
-            //     usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-            //     mapped_at_creation: false,
-            // });
-            // encoder.copy_buffer_to_buffer(
-            //     &game_data.game_state_buffer_b,
-            //     0,
-            //     &staging_buffer_b,
-            //     0,
-            //     buffer_size,
-            // );
+            }
+            // using std::iter::once to make a simple iterable that yields
             self.queue.submit(std::iter::once(encoder.finish()));
             Ok(())
         }
@@ -379,9 +291,16 @@ pub fn get_window(event_loop: &ActiveEventLoop) -> Arc<Window> {
 
     #[cfg(target_arch = "wasm32")]
     {
-        // here is where we will attach the window to the HTML canvas on the web
+        // For WASM, set up with actual canvas dimensions
         window_attributes = setup_window_with_canvas(window_attributes);
     }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        // For native, use a reasonable default size
+        window_attributes = window_attributes.with_inner_size(PhysicalSize::new(800, 600));
+    }
+
     // a winit window requires a an event loop to create it
     // we use Arc to have multiple references to this window
     let window = event_loop.create_window(window_attributes).unwrap();
@@ -407,24 +326,7 @@ pub fn get_html_canvas() -> web_sys::HtmlCanvasElement {
 }
 
 #[cfg(target_arch = "wasm32")]
-pub fn set_canvas_size(canvas: &mut web_sys::HtmlCanvasElement) {
-    let width = canvas.client_width();
-    let height = canvas.client_height();
-    // let width = width;
-    // let height = height;
-    canvas.set_width(width as u32);
-    canvas.set_height(height as u32);
-
-    // canvas.set_width(500);
-    // canvas.set_height(500);
-}
-
-#[cfg(target_arch = "wasm32")]
 fn setup_window_with_canvas(window_attributes: WindowAttributes) -> WindowAttributes {
-    let mut canvas = get_html_canvas();
-    // set up the dimensions correctly
-    set_canvas_size(&mut canvas);
-
-    // attach the canvas to the window attributes for window creation
+    let canvas = get_html_canvas();
     window_attributes.with_canvas(Some(canvas))
 }
