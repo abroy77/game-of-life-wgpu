@@ -17,6 +17,11 @@ The Game of Life follows simple rules:
 - **Cross-Platform**: Runs natively on desktop and in web browsers via WebAssembly
 - **High Performance**: Ping-pong buffer system for efficient GPU memory usage
 - **Instanced Rendering**: Efficient GPU rendering of thousands of cells
+## Inspiration
+There are hundreds of GoL projects on the web and most of them look way better than mine.
+These two are notable examples which I took inspiration from:
+1. [Jovianmoon's implementation](https://life.jovianmoon.io/)
+2. [Psychedelicio](https://lifelike.psychedelicio.us/)
 
 ### Prerequisites
 
