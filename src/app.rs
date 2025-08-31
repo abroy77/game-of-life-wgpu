@@ -48,9 +48,6 @@ pub enum AppEvents {
     UpdatePlayPauseUI,
 }
 
-// use std::sync::Mutex;
-// use winit::event_loop::EventLoopProxy;
-
 // This thread local will allow us to send events from our JS functions to control
 // the state of the app
 #[cfg(target_arch = "wasm32")]
@@ -431,12 +428,6 @@ impl ApplicationHandler<AppEvents> for App {
                 // we only want to add positions to the buffer if in grid and pressed
                 if mouse.in_grid {
                     let logical_pos = phys_pos.to_logical(graphics_context.window.scale_factor());
-                    // log::info!(
-                    //     "Mouse coordinates - Physical: {:?}, Logical: {:?}, Scale factor: {}",
-                    //     phys_pos,
-                    //     logical_pos,
-                    //     graphics_context.window.scale_factor()
-                    // );
 
                     mouse.pos = logical_pos;
                     if mouse.is_pressed {

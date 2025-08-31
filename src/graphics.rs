@@ -2,7 +2,6 @@ use crate::{
     config::AppConfig, game_data::GameData, paint::MousePainter, render_data::RenderData,
     vertex::INDICES,
 };
-// use log::info;
 use std::sync::Arc;
 #[cfg(not(target_arch = "wasm32"))]
 use winit::dpi::PhysicalSize;
@@ -158,63 +157,9 @@ impl GraphicsContext {
                     config.compute_dispatches[1] as u32,
                     1,
                 );
-            } // using std::iter::once to make a simple iterable that yields
-            // a single item. This means I don't need to make a vec or array.
-            // let buffer_size =
-            //     (config.num_elements() * std::mem::size_of::<u32>()) as wgpu::BufferAddress;
-            // let staging_buffer_a = self.device.create_buffer(&wgpu::BufferDescriptor {
-            //     label: Some("Staging Buffer A"),
-            //     size: buffer_size,
-            //     usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-            //     mapped_at_creation: false,
-            // });
-            // encoder.copy_buffer_to_buffer(
-            //     &game_data.game_state_buffer_a,
-            //     0,
-            //     &staging_buffer_a,
-            //     0,
-            //     buffer_size,
-            // );
-            // let staging_buffer_b = self.device.create_buffer(&wgpu::BufferDescriptor {
-            //     label: Some("Staging Buffer B"),
-            //     size: buffer_size,
-            //     usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-            //     mapped_at_creation: false,
-            // });
-            // encoder.copy_buffer_to_buffer(
-            //     &game_data.game_state_buffer_b,
-            //     0,
-            //     &staging_buffer_b,
-            //     0,
-            //     buffer_size,
-            // );
+            }
+            // using std::iter::once to make a simple iterable that yields
             self.queue.submit(std::iter::once(encoder.finish()));
-
-            // let buffer_slice_a = staging_buffer_a.slice(..);
-            // buffer_slice_a.map_async(wgpu::MapMode::Read, |result| {
-            //     if result.is_ok() {
-            //     }
-            // });
-
-            // _ = self.device.poll(wgpu::PollType::Wait);
-            // let data = buffer_slice_a.get_mapped_range();
-            // let cells: &[u32] = bytemuck::cast_slice(&data);
-            // println!("Current Data A: {:?}", cells);
-            // drop(data);
-            // staging_buffer_a.unmap();
-
-            // let buffer_slice_b = staging_buffer_b.slice(..);
-            // buffer_slice_b.map_async(wgpu::MapMode::Read, |result| {
-            //     if result.is_ok() {
-            //     }
-            // });
-
-            // _ = self.device.poll(wgpu::PollType::Wait);
-            // let data = buffer_slice_b.get_mapped_range();
-            // let cells: &[u32] = bytemuck::cast_slice(&data);
-            // println!("Current Data B: {:?}", cells);
-            // drop(data);
-            // staging_buffer_b.unmap();
 
             game_data.swap_current();
         }
@@ -332,36 +277,8 @@ impl GraphicsContext {
                     config.compute_dispatches[1] as u32,
                     1,
                 );
-            } // using std::iter::once to make a simple iterable that yields
-            // a single item. This means I don't need to make a vec or array.
-            // let buffer_size =
-            //     (config.num_elements() * std::mem::size_of::<u32>()) as wgpu::BufferAddress;
-            // let staging_buffer_a = self.device.create_buffer(&wgpu::BufferDescriptor {
-            //     label: Some("Staging Buffer A"),
-            //     size: buffer_size,
-            //     usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-            //     mapped_at_creation: false,
-            // });
-            // encoder.copy_buffer_to_buffer(
-            //     &game_data.game_state_buffer_a,
-            //     0,
-            //     &staging_buffer_a,
-            //     0,
-            //     buffer_size,
-            // );
-            // let staging_buffer_b = self.device.create_buffer(&wgpu::BufferDescriptor {
-            //     label: Some("Staging Buffer B"),
-            //     size: buffer_size,
-            //     usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-            //     mapped_at_creation: false,
-            // });
-            // encoder.copy_buffer_to_buffer(
-            //     &game_data.game_state_buffer_b,
-            //     0,
-            //     &staging_buffer_b,
-            //     0,
-            //     buffer_size,
-            // );
+            }
+            // using std::iter::once to make a simple iterable that yields
             self.queue.submit(std::iter::once(encoder.finish()));
             Ok(())
         }
@@ -409,37 +326,7 @@ pub fn get_html_canvas() -> web_sys::HtmlCanvasElement {
 }
 
 #[cfg(target_arch = "wasm32")]
-pub fn set_canvas_size(canvas: &mut web_sys::HtmlCanvasElement) {
-    let width = canvas.client_width();
-    let height = canvas.client_height();
-    log::info!("Canvas client dimensions: {}x{}", width, height);
-
-}
-
-#[cfg(target_arch = "wasm32")]
 fn setup_window_with_canvas(window_attributes: WindowAttributes) -> WindowAttributes {
     let mut canvas = get_html_canvas();
-    // set up the dimensions correctly
-    set_canvas_size(&mut canvas);
-
-    // Get the actual canvas dimensions and convert to logical size
-    // log::info!("setup window with canvas:\n {}x{}", physical_width, physical_height);
-
-    // Get device pixel ratio to convert to logical size
-    // let window = web_sys::window().unwrap();
-    // let device_pixel_ratio = window.device_pixel_ratio();
-
-    // let logical_width = physical_width as f64 / device_pixel_ratio;
-    // let logical_height = physical_height as f64 / device_pixel_ratio;
-
-    // log::info!("Canvas dimensions - Physical: {}x{}, Device pixel ratio: {}, Logical: {}x{}",
-    //    physical_width, physical_height, device_pixel_ratio, logical_width, logical_height);
-    // log::info!("Canvas dimensions setting to {}x{}", physical_width, physical_height);
-
-    // attach the canvas to the window attributes for window creation using logical size
     window_attributes.with_canvas(Some(canvas))
-    // .with_inner_size(winit::dpi::PhysicalSize::new(
-    //     physical_width,
-    //     physical_height,
-    // ))
 }

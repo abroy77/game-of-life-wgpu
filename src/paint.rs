@@ -5,8 +5,6 @@ use winit::window::Window;
 
 use crate::config::AppConfig;
 
-// const PAINTER_BUFFER_CLEAR_INTERVAL: Duration = Duration::from_millis(16); // 16 fps
-
 pub struct MousePainter {
     pub in_grid: bool,
     pub is_pressed: bool,
