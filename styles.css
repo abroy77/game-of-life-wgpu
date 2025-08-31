@@ -19,8 +19,8 @@ html {
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 
-               'Helvetica Neue', Arial, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
   line-height: 1.5;
   color: #0f0f0f;
   background: #fafafa;
@@ -39,7 +39,7 @@ body {
   --color-text-muted: #666666;
   --color-border: #e5e5e5;
   --color-border-focus: #d4d4d4;
-  
+
   /* Spacing */
   --space-xs: 0.25rem;
   --space-sm: 0.5rem;
@@ -47,7 +47,7 @@ body {
   --space-lg: 1.5rem;
   --space-xl: 2rem;
   --space-2xl: 3rem;
-  
+
   /* Typography */
   --font-size-xs: 0.75rem;
   --font-size-sm: 0.875rem;
@@ -55,16 +55,17 @@ body {
   --font-size-lg: 1.125rem;
   --font-size-xl: 1.25rem;
   --font-size-2xl: 1.5rem;
-  
+
   /* Layout */
   --border-radius: 0.5rem;
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
   --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
   --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
-  
+
   /* Sidebar */
-  --sidebar-width: 20rem; /* 320px */
-  
+  --sidebar-width: 20rem;
+  /* 320px */
+
   /* Transitions */
   --transition-fast: 0.15s ease;
   --transition-normal: 0.25s ease;
@@ -75,7 +76,7 @@ body {
 /* App Container - Mobile: Stack vertically */
 .app-container {
   display: grid;
-  grid-template-areas: 
+  grid-template-areas:
     "canvas"
     "sidebar";
   grid-template-rows: 60vh 40vh;
@@ -118,6 +119,8 @@ canvas {
   padding: var(--space-lg);
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  height: 40vh;
+  position: relative;
 }
 
 /* ===== TYPOGRAPHY & CONTENT ===== */
@@ -172,7 +175,8 @@ button {
   color: var(--color-text);
   cursor: pointer;
   transition: all var(--transition-fast);
-  min-height: 44px; /* Touch target size */
+  min-height: 44px;
+  /* Touch target size */
 }
 
 button:hover {
@@ -325,19 +329,19 @@ button:focus {
 
 /* ===== DESKTOP LAYOUT ===== */
 @media screen and (min-width: 768px) {
-  
+
   /* Desktop: Horizontal layout with sidebar on left */
   .app-container {
     grid-template-areas: "sidebar canvas";
     grid-template-rows: 1fr;
     grid-template-columns: var(--sidebar-width) 1fr;
   }
-  
+
   /* Desktop Canvas - Takes remaining space */
   .main-content {
     grid-area: canvas;
   }
-  
+
   /* Desktop Sidebar - Fixed width on left */
   .sidebar {
     grid-area: sidebar;
@@ -345,65 +349,67 @@ button:focus {
     border-right: 1px solid var(--color-border);
     box-shadow: var(--shadow-md);
     padding: var(--space-xl);
+    height: 100%;
+    position: relative;
   }
-  
+
   /* Desktop Typography */
   .sidebar h1 {
     font-size: var(--font-size-2xl);
     margin-bottom: var(--space-sm);
   }
-  
+
   .sidebar .subtitle {
     font-size: var(--font-size-base);
     margin-bottom: var(--space-2xl);
   }
-  
+
   .sidebar-section {
     margin-bottom: var(--space-2xl);
   }
-  
+
   .sidebar-section h3 {
     font-size: var(--font-size-lg);
     margin-bottom: var(--space-lg);
   }
-  
+
   /* Desktop Controls */
   .controls-section {
     gap: var(--space-lg);
   }
-  
+
   .button-grid {
     gap: var(--space-md);
   }
-  
+
   button {
     font-size: var(--font-size-base);
     padding: var(--space-lg) var(--space-xl);
     min-height: auto;
   }
-  
+
   /* Desktop Tips */
   .tips-section {
     padding: var(--space-lg);
   }
-  
+
   .tips-section h4 {
     font-size: var(--font-size-base);
     margin-bottom: var(--space-md);
   }
-  
+
   .tips-section p,
   .tips-section ul {
     font-size: var(--font-size-sm);
     line-height: 1.7;
     margin: var(--space-md) 0;
   }
-  
+
   /* Show desktop-only content */
   .desktop-only {
     display: block;
   }
-  
+
   /* Enhanced hover effects on desktop */
   button:hover {
     box-shadow: var(--shadow-sm);
@@ -415,14 +421,15 @@ button:focus {
   .sidebar {
     padding: var(--space-2xl);
   }
-  
+
   .sidebar-section {
     margin-bottom: var(--space-2xl);
   }
 }
 
 /* ===== HIGH DPI DISPLAYS ===== */
-@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+@media (-webkit-min-device-pixel-ratio: 2),
+(min-resolution: 192dpi) {
   canvas {
     image-rendering: -webkit-optimize-contrast;
     image-rendering: crisp-edges;
@@ -439,6 +446,7 @@ button:focus {
 
 /* Reduced motion preference */
 @media (prefers-reduced-motion: reduce) {
+
   *,
   *::before,
   *::after {
@@ -446,7 +454,7 @@ button:focus {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
-  
+
   html {
     scroll-behavior: auto;
   }
@@ -470,11 +478,11 @@ button:focus {
     --color-border: #333333;
     --color-border-focus: #555555;
   }
-  
+
   canvas {
     background: #1a1a1a;
   }
-  
+
   .tips-section {
     background: #262626;
   }
