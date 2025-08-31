@@ -6,7 +6,6 @@ use crate::{
     render_data::RenderData,
 };
 
-use log::info;
 use std::cmp;
 use std::sync::Arc;
 use winit::{
@@ -28,7 +27,6 @@ use {
 
 #[cfg(target_arch = "wasm32")]
 use {
-    crate::graphics::{get_html_canvas, set_canvas_size},
     std::sync::Mutex,
     wasm_bindgen::prelude::*,
     web_sys,
@@ -351,17 +349,10 @@ impl ApplicationHandler<AppEvents> for App {
                 event_loop.exit();
             }
             WindowEvent::Resized(size) => {
-                info!("Resizing");
                 graphics_context.resize(size.width, size.height);
                 mouse.configure(&graphics_context.window, &self.config);
                 #[cfg(not(target_arch = "wasm32"))]
                 self.reset_cursor(event_loop);
-                #[cfg(target_arch = "wasm32")]
-                {
-                    // we need to set the size via the canvas
-                    let mut canvas = get_html_canvas();
-                    set_canvas_size(&mut canvas);
-                }
             }
             WindowEvent::ScaleFactorChanged {
                 scale_factor: _,
@@ -400,11 +391,9 @@ impl ApplicationHandler<AppEvents> for App {
             } => self.handle_key(event_loop, code, state.is_pressed()),
             WindowEvent::CursorEntered { device_id: _ } => {
                 mouse.in_grid = true;
-                log::info!("cursor entered");
             }
             WindowEvent::CursorLeft { device_id: _ } => {
                 mouse.in_grid = false;
-                log::info!("cursor left");
             }
             WindowEvent::MouseInput {
                 device_id: _,

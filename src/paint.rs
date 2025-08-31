@@ -22,15 +22,6 @@ fn get_window_logical_size(window: &Arc<Window>) -> (f32, f32) {
     let scale_factor = window.scale_factor();
     let log = physical_size.to_logical::<f32>(scale_factor);
     let (x, y) = (log.width, log.height);
-
-    log::info!(
-        "Window dimensions - Physical: {:?}, Scale factor: {}, Logical: {}x{}",
-        physical_size,
-        scale_factor,
-        x,
-        y
-    );
-
     (x, y)
 }
 impl MousePainter {
@@ -141,26 +132,12 @@ impl MousePainter {
         // need to do a checked subtraction to prevent overflow issues
         let y = (config.rows - 1).checked_sub((self.pos.y as f32 / div_y) as usize);
 
-        log::info!(
-            "Paint calculation - Pos: {:?}, Div factor: {:?}, Grid coords: ({}, {:?})",
-            self.pos,
-            self.array_div_factor,
-            x,
-            y
-        );
-
         if let Some(y) = y {
             // now get the array_pos:
             let array_pos = x + config.cols * y;
-            log::info!(
-                "Paint buffer - Array pos: {}, Buffer len: {}",
-                array_pos,
-                self.paint_buffer_cpu.len()
-            );
 
             if array_pos < self.paint_buffer_cpu.len() {
                 self.paint_buffer_cpu[array_pos] = 1;
-                log::info!("Successfully painted at grid position ({}, {})", x, y);
             } else {
                 log::warn!(
                     "Paint position out of bounds: array_pos {} >= buffer_len {}",
@@ -180,15 +157,6 @@ impl MousePainter {
         let div_factor = (
             window_size.0 / config.cols as f32,
             window_size.1 / config.rows as f32,
-        );
-
-        log::info!(
-            "Array div factor calculation - Window: {}x{}, Grid: {}x{}, Div factor: {:?}",
-            window_size.0,
-            window_size.1,
-            config.cols,
-            config.rows,
-            div_factor
         );
 
         div_factor

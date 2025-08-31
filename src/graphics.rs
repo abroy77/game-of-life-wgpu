@@ -327,6 +327,6 @@ pub fn get_html_canvas() -> web_sys::HtmlCanvasElement {
 
 #[cfg(target_arch = "wasm32")]
 fn setup_window_with_canvas(window_attributes: WindowAttributes) -> WindowAttributes {
-    let mut canvas = get_html_canvas();
+    let canvas = get_html_canvas();
     window_attributes.with_canvas(Some(canvas))
 }
