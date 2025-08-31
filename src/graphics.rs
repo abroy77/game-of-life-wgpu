@@ -414,9 +414,6 @@ pub fn set_canvas_size(canvas: &mut web_sys::HtmlCanvasElement) {
     let height = canvas.client_height();
     log::info!("Canvas client dimensions: {}x{}", width, height);
 
-    // canvas.set_width(width as u32);
-    // canvas.set_height(height as u32);
-    // log::info!("Canvas internal dimensions set to: {}x{}", width, height);
 }
 
 #[cfg(target_arch = "wasm32")]
