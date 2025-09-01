@@ -37,6 +37,7 @@ body {
   --color-surface: #ffffff;
   --color-text: #0f0f0f;
   --color-text-muted: #666666;
+  --color-text-hover: #0f0f0f;
   --color-border: #e5e5e5;
   --color-border-focus: #d4d4d4;
 
@@ -182,14 +183,16 @@ button {
 button:hover {
   background: #f8f9fa;
   border-color: var(--color-border-focus);
+  color: var(--color-text-muted);
 }
 
 button:active {
-  background: #e9ecef;
+  background: var(--color-text);
   transform: translateY(1px);
+  color: var(--color-text-muted);
 }
 
-button:focus {
+button:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
 }
@@ -474,6 +477,7 @@ button:focus {
     --color-background: #0f0f0f;
     --color-surface: #1a1a1a;
     --color-text: #f5f5f5;
+    --color-text-hover: #0f0f0f;
     --color-text-muted: #a0a0a0;
     --color-border: #333333;
     --color-border-focus: #555555;
