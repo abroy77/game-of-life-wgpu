@@ -177,7 +177,8 @@ button {
   cursor: pointer;
   transition: all var(--transition-fast);
   min-height: 44px;
-  /* Touch target size */
+  touch-action: manipulation
+    /* Touch target size */
 }
 
 button:hover {
