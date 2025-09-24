@@ -102,10 +102,19 @@
               Chrome, Safari, or Firefox.
             </p>
 
-            <h4>iOS Safari</h4>
+            <h4>iOS Safari pre iOS 26</h4>
             <p>
               Go to Settings → Apps → Safari → Advanced → Feature Flags → enable
               "WebGPU"
+            </p>
+            <h4>Linux</h4>
+            <p>
+              WebGPU is not stable on linux yet. Open from command line by
+              running
+              <code style="word-wrap: break-word"
+                >google-chrome https://abroy77.github.io/game-of-life-wgpu/
+                --new-window --enable-features=Vulkan --enable-unsafe-webgpu
+              </code>
             </p>
 
             <h4>Performance</h4>
