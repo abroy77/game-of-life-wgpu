@@ -14,7 +14,7 @@ var<storage, read_write> next_state: array<u32>;
 
 const OFFSETS: array<vec2<i32>, 8> = array<vec2<i32>, 8>(
     vec2<i32>( 0, -1), // top
-    vec2<i32>( -1, -1), // top left 
+    vec2<i32>( -1, -1), // top left
     vec2<i32>(-1,  0), // left
     vec2<i32>(-1, 1), // bottom left
     vec2<i32>( 0,  1), // bottom
@@ -72,11 +72,11 @@ fn get_n_neighbors(pos: vec2<i32>) -> u32 {
         if pos_in_grid(neighbor) {
             let idx = pos_to_index(neighbor);
             if current_state[idx] == 1u {
-                n= n+1u;
+                n = n+1u;
             }
-            
+
         }
-        
+
     }
 
     return n;
