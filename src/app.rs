@@ -27,7 +27,7 @@ use {
 
 #[cfg(target_arch = "wasm32")]
 use {
-    std::sync::Mutex,
+    std::cell::RefCell,
     wasm_bindgen::prelude::*,
     web_sys,
     web_time::{Duration, Instant},
@@ -49,7 +49,7 @@ pub enum AppEvents {
 // This thread local will allow us to send events from our JS functions to control
 // the state of the app
 #[cfg(target_arch = "wasm32")]
-thread_local! {pub static EVENT_LOOP_PROXY: Mutex<Option<EventLoopProxy<AppEvents>>> = Mutex::new(None);}
+thread_local! {pub static EVENT_LOOP_PROXY: RefCell<Option<EventLoopProxy<AppEvents>>> = const { RefCell::new(None) };}
 
 pub struct App {
     // EventLoopProxy allows for Async code which is needed on the web so the
@@ -103,7 +103,7 @@ impl App {
                             AppEvents::NewGraphicsContext(
                                 GraphicsContext::new(window)
                                     .await
-                                    .expect(" Could not set up graphics context")
+                                    .expect("Could not set up graphics context")
                             )
                         )
                         .is_ok()
@@ -113,7 +113,7 @@ impl App {
     }
     #[cfg(not(target_arch = "wasm32"))]
     pub fn setup_graphics_context(&mut self, window: Arc<Window>) {
-        // On desktop we're using pollster which is a very simple async runnowner
+        // On desktop we're using pollster which is a very simple async run owner
         self.graphics_context = Some(pollster::block_on(GraphicsContext::new(window)).unwrap());
     }
 
@@ -534,7 +534,7 @@ pub fn run() -> anyhow::Result<()> {
     #[cfg(target_arch = "wasm32")]
     {
         let proxy = event_loop.create_proxy();
-        EVENT_LOOP_PROXY.with(|p| *p.lock().unwrap() = Some(proxy));
+        EVENT_LOOP_PROXY.with_borrow_mut(|p| *p = Some(proxy));
         let app = App::new(&event_loop)?;
         // On web, run_app doesn't return normally, so we handle it differently
         use winit::platform::web::EventLoopExtWebSys;
