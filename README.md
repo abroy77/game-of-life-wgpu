@@ -8,7 +8,7 @@ No graphics libraries were used in this app. It's all running in WASM locally on
 The Game of Life follows simple rules:
 
 1. **Survival**: Live cell with 2-3 neighbors survives
-2. **Birth**: Dead cell with exactly 3 neighbors becomes alive  
+2. **Birth**: Dead cell with exactly 3 neighbors becomes alive
 3. **Death**: All other cells die or stay dead
 
 ## Features
@@ -17,9 +17,12 @@ The Game of Life follows simple rules:
 - **Cross-Platform**: Runs natively on desktop and in web browsers via WebAssembly
 - **High Performance**: Ping-pong buffer system for efficient GPU memory usage
 - **Instanced Rendering**: Efficient GPU rendering of thousands of cells
+
 ## Inspiration
+
 There are hundreds of GoL projects on the web and most of them look way better than mine.
 These two are notable examples which I took inspiration from:
+
 1. [Jovianmoon's implementation](https://life.jovianmoon.io/)
 2. [Psychedelicio](https://lifelike.psychedelicio.us/)
 
@@ -52,16 +55,12 @@ npx serve .
 # Or any other static file server
 ```
 
-### Conway's Rules
-
-
 ### Implementation Details
 
 - **Compute Shaders**: Game logic runs on GPU using WGSL compute shaders
 - **Ping-Pong Buffers**: Two storage buffers alternate between read/write for each frame
 - **Instanced Rendering**: Each cell is rendered as an instance with position and state
 - **WebGPU Pipeline**: Separate compute and render passes for optimal performance
-
 
 ## Deployment
 
