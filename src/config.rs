@@ -97,9 +97,9 @@ pub fn load_config() -> AppConfig {
         .unwrap()
         .try_deserialize()
         .unwrap();
-    println!("Raw Config:\n{:?}", &raw_config);
+    println!("Raw Config:\n{:?}", raw_config);
     let app_config = raw_config.into();
-    println!("App Config:\n{:?}", &app_config);
+    println!("App Config:\n{:?}", app_config);
     app_config
 }
 
