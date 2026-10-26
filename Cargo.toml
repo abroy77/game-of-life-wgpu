@@ -16,7 +16,7 @@ once_cell = "1.21.4"
 pollster = "0.4.0"
 rand = "0.9.5"
 serde = { version = "1.0.229", features = ["derive"] }
-wgpu = "26.0.1"
+wgpu = "30.0.1"
 winit = { version = "0.30.13", features = ["android-native-activity"] }
 
 [target.'cfg(target_arch="wasm32")'.dependencies]

@@ -3,6 +3,7 @@ use crate::{
     vertex::INDICES,
 };
 use std::sync::Arc;
+use wgpu::{CurrentSurfaceTexture, ExperimentalFeatures};
 #[cfg(not(target_arch = "wasm32"))]
 use winit::dpi::PhysicalSize;
 #[cfg(target_arch = "wasm32")]
@@ -54,9 +55,9 @@ impl GraphicsContext {
             }
         };
         // make a wgpu instance
-        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends,
-            ..Default::default()
+            ..wgpu::InstanceDescriptor::new_without_display_handle()
         });
 
         let surface = instance.create_surface(window.clone()).unwrap();
@@ -66,6 +67,7 @@ impl GraphicsContext {
                 power_preference: wgpu::PowerPreference::HighPerformance,
                 compatible_surface: Some(&surface),
                 force_fallback_adapter: false,
+                apply_limit_buckets: false,
             })
             .await?;
         let (device, queue) = adapter
@@ -75,6 +77,7 @@ impl GraphicsContext {
                 required_limits: wgpu::Limits::default(),
                 memory_hints: Default::default(),
                 trace: wgpu::Trace::Off,
+                experimental_features: ExperimentalFeatures::disabled(),
             })
             .await?;
 
@@ -96,6 +99,7 @@ impl GraphicsContext {
             desired_maximum_frame_latency: 2,
             alpha_mode: surface_capabilities.alpha_modes[0],
             view_formats: vec![],
+            color_space: wgpu::SurfaceColorSpace::Auto,
         };
 
         Ok(GraphicsContext {
@@ -110,18 +114,16 @@ impl GraphicsContext {
     pub fn request_redraw(&mut self) {
         self.window.request_redraw();
     }
-    pub fn get_size(&self) -> Option<(u32, u32)> {
-        if self.is_surface_configured {
-            let size = self.window.inner_size();
-            Some((size.width, size.height))
-        } else {
-            None
-        }
-    }
-
     pub fn get_window_size(&self) -> (u32, u32) {
         let size = self.window.inner_size();
         (size.width, size.height)
+    }
+
+    /// Apply the stored `surface_config` to the surface.
+    fn apply_surface_config(&mut self) {
+        self.surface.configure(&self.device, &self.surface_config);
+        self.is_surface_configured = true;
+        println!("Surface configured successfully");
     }
 
     pub fn resize(&mut self, width: u32, height: u32) {
@@ -129,10 +131,14 @@ impl GraphicsContext {
         if width > 0 && height > 0 {
             self.surface_config.width = width;
             self.surface_config.height = height;
-            self.surface.configure(&self.device, &self.surface_config);
-            self.is_surface_configured = true;
-            println!("Surface configured successfully");
+            self.apply_surface_config();
         }
+    }
+
+    /// Resize the surface to match the window's current size.
+    fn resize_to_window(&mut self) {
+        let (width, height) = self.get_window_size();
+        self.resize(width, height);
     }
     pub fn update(&mut self, game_data: &mut GameData, config: &AppConfig) {
         if !self.is_surface_configured {
@@ -170,74 +176,75 @@ impl GraphicsContext {
         render_data: &RenderData,
         game_state_render_bind_group: &wgpu::BindGroup,
         config: &AppConfig,
-    ) -> Result<(), wgpu::SurfaceError> {
+    ) {
         if !self.is_surface_configured {
             // don't render unless surface is configured
-            Ok(())
-        } else {
-            // This is the texture on which we will draw
-            let output = self.surface.get_current_texture()?;
-            // we need a TextureView
-            let view = output
-                .texture
-                .create_view(&wgpu::TextureViewDescriptor::default());
-            let mut encoder = self
-                .device
-                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                    label: Some("Render Encoder"),
-                });
+            return;
+        }
+        // A suboptimal texture is still drawn, then the surface is reconfigured after presenting.
+        let (output, suboptimal) = match self.surface.get_current_texture() {
+            CurrentSurfaceTexture::Success(texture) => (texture, false),
+            CurrentSurfaceTexture::Suboptimal(texture) => (texture, true),
+            CurrentSurfaceTexture::Timeout | CurrentSurfaceTexture::Occluded => return,
+            CurrentSurfaceTexture::Outdated | CurrentSurfaceTexture::Lost => {
+                self.resize_to_window();
+                return;
+            }
+            CurrentSurfaceTexture::Validation => {
+                log::error!("Validation error while acquiring surface texture");
+                return;
+            }
+        };
+        let view = output
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Render Encoder"),
+            });
 
-            // We want to clear the screen to a single colour at the start of our render pass.
-            // For this we need a RenderPassColorAttachment that writes to our output texture view
-            // ie `view`.
-            //
-            let clear_color_attachment = wgpu::RenderPassColorAttachment {
-                // the view we're writing to. our output texture ie the whole
-                // app screen
-                view: &view,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    // operations we're performing on that view
-                    // LOAD: load the clear color onto each element of the view
-                    load: wgpu::LoadOp::Clear(config.background_color),
-                    // STORE: keep the data so it's seen on the screen
-                    store: wgpu::StoreOp::Store,
-                },
-                depth_slice: None,
-            };
-            {
-                let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("Render Pass"),
-                    color_attachments: &[Some(clear_color_attachment)],
-                    depth_stencil_attachment: None,
-                    timestamp_writes: None,
-                    occlusion_query_set: None,
-                });
-                render_pass.set_pipeline(&render_data.pipeline);
-                render_pass.set_bind_group(0, &render_data.render_uniform_bind_group, &[]);
-                render_pass.set_bind_group(1, game_state_render_bind_group, &[]);
-                render_pass.set_vertex_buffer(0, render_data.vertex_buffer.slice(..));
-                render_pass.set_vertex_buffer(1, render_data.instance_buffer.slice(..));
-                render_pass.set_index_buffer(
-                    render_data.index_buffer.slice(..),
-                    wgpu::IndexFormat::Uint16,
-                );
+        // We want to clear the screen to a single colour at the start of our render pass.
+        // For this we need a RenderPassColorAttachment that writes to our output texture view
+        let clear_color_attachment = wgpu::RenderPassColorAttachment {
+            view: &view,
+            resolve_target: None,
+            ops: wgpu::Operations {
+                // LOAD: load the clear color onto each element of the view
+                load: wgpu::LoadOp::Clear(config.background_color),
+                // STORE: keep the data so it's seen on the screen
+                store: wgpu::StoreOp::Store,
+            },
+            depth_slice: None,
+        };
+        {
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Render Pass"),
+                color_attachments: &[Some(clear_color_attachment)],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            });
+            render_pass.set_pipeline(&render_data.pipeline);
+            render_pass.set_bind_group(0, &render_data.render_uniform_bind_group, &[]);
+            render_pass.set_bind_group(1, game_state_render_bind_group, &[]);
+            render_pass.set_vertex_buffer(0, render_data.vertex_buffer.slice(..));
+            render_pass.set_vertex_buffer(1, render_data.instance_buffer.slice(..));
+            render_pass.set_index_buffer(
+                render_data.index_buffer.slice(..),
+                wgpu::IndexFormat::Uint16,
+            );
 
-                // here is where we will choose which instances to draw in different
-                // draw calls.
-                // Our current state_buffer in the game_state_bind group will control which
-                // cells are shown as alive.
-                render_pass.draw_indexed(
-                    0..INDICES.len() as u32,
-                    0,
-                    0..config.num_elements() as u32,
-                );
-            } // using std::iter::once to make a simple iterable that yields
-            // a single item. This means I don't need to make a vec or array.
-            self.queue.submit(std::iter::once(encoder.finish()));
-            output.present();
-
-            Ok(())
+            // Our current state_buffer in the game_state_bind group will control which
+            // cells are shown as alive.
+            render_pass.draw_indexed(0..INDICES.len() as u32, 0, 0..config.num_elements() as u32);
+        } // using std::iter::once to make a simple iterable that yields
+        // a single item. This means I don't need to make a vec or array.
+        self.queue.submit(std::iter::once(encoder.finish()));
+        self.queue.present(output);
+        if suboptimal {
+            self.resize_to_window();
         }
     }
     pub fn paint(
@@ -246,11 +253,10 @@ impl GraphicsContext {
         compute_uniform_bind_group: &wgpu::BindGroup,
         game_state_render_bind_group: &wgpu::BindGroup,
         config: &AppConfig,
-    ) -> Result<(), wgpu::SurfaceError> {
+    ) {
         if !self.is_surface_configured {
             // don't render unless surface is configured
             println!("Surface not ready for painting");
-            Ok(())
         } else {
             //
             mouse_painter.write_to_buffer(&self.queue);
@@ -280,7 +286,6 @@ impl GraphicsContext {
             }
             // using std::iter::once to make a simple iterable that yields
             self.queue.submit(std::iter::once(encoder.finish()));
-            Ok(())
         }
     }
 }

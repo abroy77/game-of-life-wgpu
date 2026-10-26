@@ -169,20 +169,11 @@ impl App {
         ) {
             game_data.reset_grid_state(&self.config, &graphics_context.queue);
             game_data.is_a_current = true;
-            match graphics_context.render(
+            graphics_context.render(
                 render_data,
                 game_data.get_current_render_bind_group(),
                 &self.config,
-            ) {
-                Ok(_) => {}
-                Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
-                    let (width, height) = graphics_context.get_size().unwrap();
-                    graphics_context.resize(width, height);
-                }
-                Err(e) => {
-                    log::error!("Unable to render {e}");
-                }
-            }
+            );
         }
     }
 
@@ -194,20 +185,11 @@ impl App {
         ) {
             game_data.randomise_grid_state(&self.config, &graphics_context.queue);
             game_data.is_a_current = true;
-            match graphics_context.render(
+            graphics_context.render(
                 render_data,
                 game_data.get_current_render_bind_group(),
                 &self.config,
-            ) {
-                Ok(_) => {}
-                Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
-                    let (width, height) = graphics_context.get_size().unwrap();
-                    graphics_context.resize(width, height);
-                }
-                Err(e) => {
-                    log::error!("Unable to render {e}");
-                }
-            }
+            );
         }
     }
     fn handle_key(&mut self, event_loop: &ActiveEventLoop, code: KeyCode, is_pressed: bool) {
@@ -367,23 +349,14 @@ impl ApplicationHandler<AppEvents> for App {
                 mouse.configure(&graphics_context.window, &self.config);
             }
             WindowEvent::RedrawRequested => {
-                match graphics_context.render(
+                graphics_context.render(
                     self.render_data.as_ref().unwrap(),
                     self.game_data
                         .as_ref()
                         .unwrap()
                         .get_current_render_bind_group(),
                     &self.config,
-                ) {
-                    Ok(_) => {}
-                    Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
-                        let (width, height) = graphics_context.get_size().unwrap();
-                        graphics_context.resize(width, height);
-                    }
-                    Err(e) => {
-                        log::error!("Unable to render {e}");
-                    }
-                }
+                );
                 // graphics_context.update(self.render_data.as_mut().unwrap());
             }
             WindowEvent::KeyboardInput {
@@ -488,7 +461,7 @@ impl ApplicationHandler<AppEvents> for App {
                 &mut self.mouse,
                 &mut self.game_data,
             ) {
-                _ = gc.paint(
+                gc.paint(
                     mouse,
                     &game_data.compute_uniform_bind_group,
                     game_data.get_current_compute_bind_group(),

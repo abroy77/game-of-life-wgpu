@@ -82,10 +82,10 @@ impl RenderData {
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Render Pipeline Layout"),
                 bind_group_layouts: &[
-                    &render_uniform_bind_group_layout,
-                    game_state_render_bind_group_layout,
+                    Some(&render_uniform_bind_group_layout),
+                    Some(game_state_render_bind_group_layout),
                 ],
-                push_constant_ranges: &[],
+                immediate_size: 0,
             });
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -100,7 +100,7 @@ impl RenderData {
                 module: &shader,
                 entry_point: Some("vs_main"),
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
-                buffers: &[Vertex::desc(), Instance::desc()],
+                buffers: &[Some(Vertex::desc()), Some(Instance::desc())],
             },
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList,
@@ -127,7 +127,7 @@ impl RenderData {
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
             }),
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         });
 

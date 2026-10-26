@@ -128,10 +128,10 @@ impl GameData {
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Compute Pipeline Layout"),
                 bind_group_layouts: &[
-                    &compute_uniform_bind_group_layout,
-                    &game_state_bind_group_layout,
+                    Some(&compute_uniform_bind_group_layout),
+                    Some(&game_state_bind_group_layout),
                 ],
-                push_constant_ranges: &[],
+                immediate_size: 0,
             });
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {

@@ -84,11 +84,11 @@ impl MousePainter {
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Painter Pipeline Layout"),
                 bind_group_layouts: &[
-                    compute_uniform_bind_group_layout,
-                    compute_bind_group_layout,
-                    &painter_bind_group_layout,
+                    Some(compute_uniform_bind_group_layout),
+                    Some(compute_bind_group_layout),
+                    Some(&painter_bind_group_layout),
                 ],
-                push_constant_ranges: &[],
+                immediate_size: 0,
             });
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
