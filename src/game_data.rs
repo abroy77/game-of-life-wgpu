@@ -40,11 +40,6 @@ impl GameData {
         let rng = rng();
 
         let current_state = vec![0_u32; config.num_elements()];
-        // let current_state = random_state(
-        //     &mut rng,
-        //     config.num_elements() as u32,
-        //     config.init_rand_threshold,
-        // );
         let next_state = current_state.clone();
 
         let game_state_buffer_a = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
