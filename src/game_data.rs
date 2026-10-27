@@ -46,7 +46,7 @@ pub struct GameData {
 /// (Compare with **storage** buffers, used for the grid: large, indexable, and can be written.)
 /// Same layout rules as `RenderUniform` in `graphics.rs`: `#[repr(C)]`, and padded to 16 bytes.
 /// The padding is not required for most GPU backends but WGSL still needs uniforms to be 16 byte
-/// padded so I've added it + the `_pad` to fill the size
+/// padded so we've added it + the `_pad` to fill the size
 #[repr(C, align(16))]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct ComputeUniform {

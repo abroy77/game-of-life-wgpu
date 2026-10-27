@@ -1,8 +1,8 @@
 //! The application: owns all the state and reacts to events from winit's event loop.
 //!
 //! winit (the windowing library) runs an **event loop**: it waits for things to happen
-//! (window resized, mouse moved, a timer ran out, …) and calls our [`App`]'s methods
-//! from the [`ApplicationHandler`] trait. The lifecycle is:
+//! (window resized, mouse moved, etc) and calls our [`App`]'s methods
+//! from the [`ApplicationHandler`] trait. The process is:
 //!
 //! 1. [`App::new`] – load config. No window or GPU yet.
 //! 2. `resumed` – the platform is ready: create the window and connect to the GPU.
@@ -50,8 +50,8 @@ use {
 };
 
 /// Our own custom events, sent into the event loop with an `EventLoopProxy` and handled in
-/// `user_event`. Used for things that don't come from the window: async GPU setup
-/// finishing, and (on the web) HTML button presses.
+/// `user_event`. Used for things that don't come from the window like async GPU setup
+/// finishing, and HTML button presses on the webapp.
 pub enum AppEvent {
     /// Web only: async GPU setup finished. Carries the ready [`GraphicsContext`].
     NewGraphicsContext(GraphicsContext),
@@ -61,8 +61,6 @@ pub enum AppEvent {
     RandomiseState,
     ResetState,
     StepForward,
-    /// Web only: refresh the Play/Pause button's label and colour.
-    UpdatePlayPauseUI,
 }
 
 // Web only: a global handle to the event loop, so the functions in `web_controls`
@@ -231,13 +229,14 @@ impl App {
             );
         }
     }
-    /// Keyboard shortcuts: Esc = quit, Space = play/pause, → = step, R = reset.
+    /// Keyboard shortcuts
     fn handle_key(&mut self, event_loop: &ActiveEventLoop, code: KeyCode, is_pressed: bool) {
         match (code, is_pressed) {
             (KeyCode::Escape, true) => event_loop.exit(),
             (KeyCode::Space, true) => self.play_pause(),
             (KeyCode::ArrowRight, true) => self.step_forward(),
             (KeyCode::KeyR, true) => self.reset_state(),
+            (KeyCode::KeyS, true) => self.randomise_state(),
             (_, _) => (),
         }
     }
@@ -247,28 +246,25 @@ impl App {
     fn setup_game_and_render_data(&mut self) {
         if let Some(graphics_context) = &self.graphics_context {
             let device = &graphics_context.device;
-            // 1. Pick rows/cols from the window shape. This must happen before any buffers
-            //    are created, because their sizes depend on it.
+            // Update the cell size and spacing configuration according to the window provided
+            // by the graphics context.
             self.config
                 .update_cell_configuration(&graphics_context.window);
-            // 2. Grid buffers + simulation pipeline.
             self.game_data = Some(GameData::new(device, &self.config));
 
-            // 3. Render pipeline. It needs the surface's pixel format and the grid's bind
-            //    group layout.
-            let surface_config = &graphics_context.surface_config;
+            // Render pipeline. It needs the surface's pixel format and the grid's bind
+            // group layout.
             self.render_data = Some(
                 RenderData::new(
                     device,
-                    surface_config,
+                    &graphics_context.surface_config,
                     &GameData::get_render_bind_group_layout(device),
                     &self.config,
                 )
                 .unwrap(),
             );
 
-            // 4. Painter. It reuses the grid's layouts so it can write into the same buffers.
-            //    (Creating a layout again with the same description gives a compatible one.)
+            // Painter. It reuses the grid's layouts so it can write into the same buffers.
             self.mouse = Some(MousePainter::new(
                 device,
                 &GameData::get_compute_bind_group_layout(device),
@@ -276,7 +272,7 @@ impl App {
                 &self.config,
                 graphics_context.window.clone(),
             ));
-            println!("got the gc set up and all");
+            log::info!("got the gc set up and all");
 
             // Initialize the play/pause button UI state
             self.update_play_pause_ui();
@@ -355,7 +351,10 @@ impl ApplicationHandler<AppEvent> for App {
                 self.graphics_context = Some(graphics_context);
                 self.setup_game_and_render_data();
             }
-            AppEvent::PlayPause => self.play_pause(),
+            AppEvent::PlayPause => {
+                self.play_pause();
+                self.update_play_pause_ui();
+            }
             AppEvent::UpdateFps(new_fps) => self.update_fps(new_fps),
             AppEvent::StepForward => {
                 // Stepping pauses the simulation first if it's running.
@@ -367,7 +366,6 @@ impl ApplicationHandler<AppEvent> for App {
             }
             AppEvent::RandomiseState => self.randomise_state(),
             AppEvent::ResetState => self.reset_state(),
-            AppEvent::UpdatePlayPauseUI => self.update_play_pause_ui(),
         }
     }
     /// Handles events from the window: close, resize, redraw, keyboard, mouse and touch.
@@ -520,7 +518,7 @@ impl ApplicationHandler<AppEvent> for App {
     /// whichever timer is due next (`ControlFlow::WaitUntil`), instead of spinning the CPU.
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
         let now = Instant::now();
-        // 1. Paint timer: push painted cells into the current grid.
+        // Paint timer pushes painted cells into the current grid.
         if now >= self.next_paint_frame {
             if let (Some(gc), Some(mouse), Some(game_data)) = (
                 &mut self.graphics_context,
@@ -537,7 +535,7 @@ impl ApplicationHandler<AppEvent> for App {
             }
             self.next_paint_frame = now + self.config.paint_frame_duration;
         }
-        // 2. Simulation timer: compute the next generation, then redraw.
+        // Simulation timer computes the next generation, then redraw.
         if now >= self.next_frame && !self.config.is_paused {
             if let (Some(gc), Some(game_data)) = (&mut self.graphics_context, &mut self.game_data) {
                 gc.update(game_data, &self.config);
@@ -546,7 +544,7 @@ impl ApplicationHandler<AppEvent> for App {
             self.next_frame = now + self.config.frame_duration;
         }
 
-        // 3. Sleep until the sooner of the two timers.
+        // Sleep until the sooner of the two timers.
         let next_deadline = cmp::min(self.next_frame, self.next_paint_frame);
         event_loop.set_control_flow(winit::event_loop::ControlFlow::WaitUntil(next_deadline));
     }
@@ -554,7 +552,7 @@ impl ApplicationHandler<AppEvent> for App {
 
 /// Start the app: set up logging, create the event loop, and hand it our [`App`].
 pub fn run() -> anyhow::Result<()> {
-    // 1. Logging: to the terminal on desktop, to the browser console on the web.
+    // Logging to the terminal on desktop, to the browser console on the web.
     #[cfg(not(target_arch = "wasm32"))]
     {
         env_logger::init();
@@ -564,10 +562,10 @@ pub fn run() -> anyhow::Result<()> {
         console_log::init_with_level(log::Level::Info).unwrap_throw();
     }
 
-    // 2. An event loop that can also carry our custom `AppEvent` (see `user_event`).
+    // An event loop that can also carry our custom `AppEvent` (see `user_event`).
     let event_loop = EventLoop::<AppEvent>::with_user_event().build()?;
 
-    // 3. Run it. On desktop `run_app` blocks until the window closes.
+    // Run it. On desktop `run_app` blocks until the window closes.
     #[cfg(not(target_arch = "wasm32"))]
     {
         let mut app = App::new()?;

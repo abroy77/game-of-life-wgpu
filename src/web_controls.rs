@@ -17,8 +17,6 @@ pub fn play_pause() {
     EVENT_LOOP_PROXY.with_borrow(|proxy| {
         if let Some(proxy) = proxy {
             let _ = proxy.send_event(AppEvent::PlayPause);
-            // Events are handled in order, so the UI update sees the new state.
-            let _ = proxy.send_event(AppEvent::UpdatePlayPauseUI);
         }
     })
 }

@@ -172,13 +172,13 @@ impl GraphicsContext {
     fn apply_surface_config(&mut self) {
         self.surface.configure(&self.device, &self.surface_config);
         self.is_surface_configured = true;
-        println!("Surface configured successfully");
+        log::info!("Surface configured successfully");
     }
 
     /// Set the surface to a new size in physical pixels. A size of zero (e.g. a minimised
     /// window) is ignored, because a surface can't be configured with a zero size.
     pub fn resize(&mut self, width: u32, height: u32) {
-        println!("Resize called: {width}x{height}");
+        log::info!("Resize called: {width}x{height}");
         if width > 0 && height > 0 {
             self.surface_config.width = width;
             self.surface_config.height = height;
@@ -350,7 +350,7 @@ impl GraphicsContext {
     ) {
         if !self.is_surface_configured {
             // don't render unless surface is configured
-            println!("Surface not ready for painting");
+            log::warn!("Surface not ready for painting");
             return;
         }
         // Upload the paint mask to the GPU, then clear the CPU copy for the next strokes.
