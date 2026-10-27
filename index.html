@@ -42,7 +42,10 @@
                 max="60"
                 step="1"
                 value="20"
-                oninput="window.updateFps(this.value); document.getElementById('fpsValue').textContent=this.value"
+                oninput="
+                  window.updateFps(this.value);
+                  document.getElementById('fpsValue').textContent = this.value;
+                "
               />
               <span id="fpsValue" class="value">20</span>
             </div>
@@ -102,11 +105,6 @@
               Chrome, Safari, or Firefox.
             </p>
 
-            <h4>iOS Safari pre iOS 26</h4>
-            <p>
-              Go to Settings → Apps → Safari → Advanced → Feature Flags → enable
-              "WebGPU"
-            </p>
             <h4>Linux</h4>
             <p>
               WebGPU is not stable on linux yet. Open from command line by
