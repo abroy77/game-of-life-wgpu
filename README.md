@@ -62,6 +62,10 @@ npx serve .
 - **Instanced Rendering**: Each cell is rendered as an instance with position and state
 - **WebGPU Pipeline**: Separate compute and render passes for optimal performance
 
+The code is documented as a walkthrough of my first wgpu project. Run `cargo doc --no-deps --open`
+and start from the crate overview, which gives a suggested reading order if you (or me in 1 year)
+wants to learn (relearn) how all this works
+
 ## Deployment
 
 This project includes GitHub Actions for automatic deployment to GitHub Pages:
