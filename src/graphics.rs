@@ -329,7 +329,7 @@ impl GraphicsContext {
         // Send the commands to the GPU, then hand the finished frame to the screen.
         self.queue.submit(std::iter::once(encoder.finish()));
         self.queue.present(output);
-        // if the surface texture ws suboptimal, run resize and configure the surface again.
+        // if the surface texture was suboptimal, run resize and configure the surface again.
         if suboptimal {
             self.resize_to_window();
         }
