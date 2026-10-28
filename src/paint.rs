@@ -168,8 +168,8 @@ impl MousePainter {
         }
     }
     /// Zero the paint mask after it has been uploaded.
-    /// #TODO: this is currently quite a heavy opertion to be doing for each paint pass.
-    /// Need to find a better way to encode and send the paint buffer points to GPU. maybe as indeces perhaps?
+    /// #TODO: this is currently quite a heavy operation to be doing for each paint pass.
+    /// Need to find a better way to encode and send the paint buffer points to GPU. maybe as indices perhaps?
     /// rather than the whole mask? that way when there's no painting then I can just not do this clear step.
     pub fn clear_buffer(&mut self) {
         self.paint_buffer_cpu.iter_mut().for_each(|x| *x = 0);
