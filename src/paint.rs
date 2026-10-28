@@ -32,6 +32,9 @@ pub struct MousePainter {
     pub painter_buffer_bind_group: wgpu::BindGroup,
     /// The finger we're following on a touch screen, so a second finger doesn't jump the stroke.
     pub finger_id: Option<u64>,
+    /// previous position of cursor in a single stroke.
+    /// Reverts to None when a stroke ends.
+    pub previous_paint_cell: Option<(usize, usize)>,
 }
 
 /// Window size in logical pixels (physical pixels / display scale factor).
@@ -136,35 +139,97 @@ impl MousePainter {
             painter_pipeline,
             painter_buffer_bind_group,
             finger_id,
+            previous_paint_cell: None,
         }
     }
     /// Mark the cell under the cursor (`self.pos`) in the paint mask.
     pub fn add_to_buffer(&mut self, config: &AppConfig) {
+        let Some(cell) = self.pos_to_cell(config) else {
+            // mark None when out of bounds.
+            self.previous_paint_cell = None;
+            return;
+        };
+        // if we're in the grid then
+        match self.previous_paint_cell {
+            Some(prev_cell) => self.mark_line(prev_cell, cell, config),
+            None => self.mark_cell(cell, config),
+        }
+        // Remember this cell, so the next event in this stroke draws a line from here.
+        self.previous_paint_cell = Some(cell);
+    }
+    /// Convert the received logical pixel to cell coordinates in the grid.
+    /// None if out of bounds.
+    pub fn pos_to_cell(&self, config: &AppConfig) -> Option<(usize, usize)> {
+        // Left of or above the window. Without this, `as usize` would turn the negative
+        // value into 0 and wrongly map it to the edge column / top row.
+        if self.pos.x < 0.0 || self.pos.y < 0.0 {
+            return None;
+        }
         // Convert the logical pixel position into a column and row.
         let (div_x, div_y) = self.array_div_factor;
         let x = (self.pos.x as f32 / div_x) as usize;
         if x >= config.cols {
-            return;
+            return None;
         }
         // Window y goes top → bottom, but the grid's row 0 is at the bottom (clip space y points up),
         // so we flip it. `checked_sub` avoids underflow if the cursor is below the bottom most row.
+        // The result is at most `rows - 1`.
         let y = (config.rows - 1).checked_sub((self.pos.y as f32 / div_y) as usize);
 
-        if let Some(y) = y {
-            // Same row-by-row indexing as the grid buffers.
-            let array_pos = x + config.cols * y;
+        y.map(|y| (x, y))
+    }
+    /// Mark a single cell as `on` by its grid coordinates.
+    pub fn mark_cell(&mut self, pos: (usize, usize), config: &AppConfig) {
+        let array_pos = pos.0 + config.cols * pos.1;
+        self.paint_buffer_cpu[array_pos] = 1;
+    }
+    /// Mark every cell on a straight line from `from` to `to` inclusive.
+    ///
+    /// [`Bresenham's line algorithm for all cases`](https://en.wikipedia.org/wiki/Bresenham%27s_line_algorithm#All_cases)
+    /// which walks one cell at a time either in x, y or both from start to end
+    pub fn mark_line(&mut self, from: (usize, usize), to: (usize, usize), config: &AppConfig) {
+        // starting x, y which will update as we move the plotter
+        // using i64 as step directions can be -ve
+        let (mut x, mut y) = (from.0 as i64, from.1 as i64);
+        // destination
+        let (x1, y1) = (to.0 as i64, to.1 as i64);
 
-            if array_pos < self.paint_buffer_cpu.len() {
-                self.paint_buffer_cpu[array_pos] = 1;
-            } else {
-                log::warn!(
-                    "Paint position out of bounds: array_pos {} >= buffer_len {}",
-                    array_pos,
-                    self.paint_buffer_cpu.len()
-                );
+        // How far the line goes in x and y. directions handled by sx, sy.
+        // Since the sx,sy are handling direction we can think of dx as how far
+        // right the line goes and dy as how far up.
+        // dy is stored as negative so that we can have one `err` value
+        // updating instead of 2 separate ones
+        let dx = (x1 - x).abs();
+        let dy = -(y1 - y).abs(); // negative
+        // initial err value. +ve means shallow line. -ve means steep line
+        // at least at the start
+        let mut err = dx + dy;
+
+        // steps
+        let sx = if x < x1 { 1 } else { -1 };
+        let sy = if y < y1 { 1 } else { -1 };
+
+        // err      = how far the diagonal cell D (x+1, y+1) is off the true line (scaled to whole numbers)
+        // 2·err ≤ dx   → D within ½ cell vertically   → move in y
+        // 2·err ≥ dy   → D within ½ cell horizontally → move in x
+        // both         → diagonal step
+        // moved in x   → err += dy  (D got closer horizontally)
+        // moved in y   → err += dx  (D got higher)
+        // sx, sy       → turn "right/up" into the real direction
+        loop {
+            self.mark_cell((x as usize, y as usize), config);
+            if x == x1 && y == y1 {
+                break;
             }
-        } else {
-            log::warn!("Invalid Y coordinate calculation");
+            let e2 = err * 2;
+            if e2 >= dy {
+                err += dy; // dy is -ve so this reduces err
+                x += sx;
+            }
+            if e2 <= dx {
+                err += dx; // increases err
+                y += sy;
+            }
         }
     }
     /// Zero the paint mask after it has been uploaded.
