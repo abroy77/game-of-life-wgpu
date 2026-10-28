@@ -386,6 +386,7 @@ impl GraphicsContext {
 }
 
 /// Create the app window:  attached to the page's `<canvas id="canvas">` on the web.
+#[cfg_attr(target_arch = "wasm32", allow(unused_variables))]
 pub fn get_window(event_loop: &ActiveEventLoop, config: &AppConfig) -> Arc<Window> {
     #[allow(unused_mut)]
     let mut window_attributes = Window::default_attributes();
