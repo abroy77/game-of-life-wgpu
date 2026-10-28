@@ -1,3 +1,18 @@
+//! The application: owns all the state and reacts to events from winit's event loop.
+//!
+//! winit (the windowing library) runs an **event loop**: it waits for things to happen
+//! (window resized, mouse moved, etc) and calls our [`App`]'s methods
+//! from the [`ApplicationHandler`] trait. The process is:
+//!
+//! 1. [`App::new`] – load config. No window or GPU yet.
+//! 2. `resumed` – the platform is ready: create the window and connect to the GPU.
+//! 3. `window_event` – input, resizes, and `RedrawRequested` (→ render).
+//! 4. `about_to_wait` – the loop is about to sleep. We check our two timers here
+//!    (paint and simulate) and decide when to wake up next.
+//!
+//! On the web, connecting to the GPU must be async and can't block, so it finishes later and
+//! reports back through a custom event ([`AppEvent::NewGraphicsContext`]).
+
 use crate::{
     config::{AppConfig, load_config},
     game_data::GameData,
@@ -34,40 +49,51 @@ use {
     winit::event_loop::EventLoopProxy,
 };
 
-pub enum AppEvents {
+/// Our own custom events, sent into the event loop with an `EventLoopProxy` and handled in
+/// `user_event`. Used for things that don't come from the window like async GPU setup
+/// finishing, and HTML button presses on the webapp.
+pub enum AppEvent {
+    /// Web only: async GPU setup finished. Carries the ready [`GraphicsContext`].
     NewGraphicsContext(GraphicsContext),
     PlayPause,
+    /// New simulation speed in steps per second.
     UpdateFps(usize),
     RandomiseState,
     ResetState,
     StepForward,
-    UpdateRows(usize),
-    UpdateCols(usize),
-    UpdatePlayPauseUI,
 }
 
-// This thread local will allow us to send events from our JS functions to control
-// the state of the app
+// Web only: a global handle to the event loop, so the functions in `web_controls`
+// (called from JavaScript) can send `AppEvent` into the app.
+// `thread_local!` + `RefCell` is a simple way to have a mutable global in single-threaded wasm.
 #[cfg(target_arch = "wasm32")]
-thread_local! {pub static EVENT_LOOP_PROXY: RefCell<Option<EventLoopProxy<AppEvents>>> = const { RefCell::new(None) };}
+thread_local! {pub static EVENT_LOOP_PROXY: RefCell<Option<EventLoopProxy<AppEvent>>> = const { RefCell::new(None) };}
 
+/// All app state.
+///
+/// The GPU-related fields are `Option` because they can't exist until the window and GPU are
+/// ready (in `resumed`, or later on the web). Until then they're `None`, and the event
+/// handlers do nothing.
 pub struct App {
-    // EventLoopProxy allows for Async code which is needed on the web so the
-    //page does not hang when waiting on resources.
+    /// Web only: lets the async GPU setup send its result back to the event loop,
+    /// so the page doesn't freeze while it waits.
     #[cfg(target_arch = "wasm32")]
-    proxy: Option<EventLoopProxy<AppEvents>>,
+    proxy: Option<EventLoopProxy<AppEvent>>,
     graphics_context: Option<GraphicsContext>,
     render_data: Option<RenderData>,
     game_data: Option<GameData>,
+    /// When the next simulation step is due.
     next_frame: Instant,
+    /// When the next paint upload is due.
     next_paint_frame: Instant,
     mouse: Option<MousePainter>,
     config: AppConfig,
 }
 
 impl App {
+    /// Load the config and set up the timers. The window and GPU are created later, in `resumed`.
     pub fn new(
-        #[cfg(target_arch = "wasm32")] event_loop: &EventLoop<AppEvents>,
+        #[cfg(target_arch = "wasm32")] event_loop: &EventLoop<AppEvent>,
     ) -> anyhow::Result<Self> {
         #[cfg(target_arch = "wasm32")]
         let proxy = Some(event_loop.create_proxy());
@@ -88,19 +114,21 @@ impl App {
             mouse: None,
         })
     }
+    /// Web: start connecting to the GPU in the background.
+    ///
+    /// Browsers don't allow blocking, so `spawn_local` runs the async setup as a JS promise.
+    /// When it finishes, the result is sent back as [`AppEvent::NewGraphicsContext`] and
+    /// handled in `user_event`.
     #[cfg(target_arch = "wasm32")]
     pub fn setup_graphics_context(&mut self, window: Arc<Window>) {
-        // Run the future asynchronously and use the proxy
-        // to send results to the main event loop
-
         if let Some(proxy) = self.proxy.take() {
             wasm_bindgen_futures::spawn_local(async move {
                 assert!(
                     proxy
                         .send_event(
-                            // so we can send event because we parameterised our proxy in the 'App'
-                            // to be able to send 'State' as an event!
-                            AppEvents::NewGraphicsContext(
+                            // The event type is our `AppEvent` enum, so we can send the
+                            // whole GraphicsContext through the event loop.
+                            AppEvent::NewGraphicsContext(
                                 GraphicsContext::new(window)
                                     .await
                                     .expect("Could not set up graphics context")
@@ -111,21 +139,25 @@ impl App {
             });
         }
     }
+    /// Desktop: connect to the GPU right away.
+    ///
+    /// `pollster::block_on` is a tiny async runtime: it simply waits for the future to finish.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn setup_graphics_context(&mut self, window: Arc<Window>) {
-        // On desktop we're using pollster which is a very simple async run owner
         self.graphics_context = Some(pollster::block_on(GraphicsContext::new(window)).unwrap());
     }
 
+    /// Toggle the simulation between running and paused.
     fn play_pause(&mut self) {
         self.config.is_paused = !self.config.is_paused;
     }
+    /// Change the simulation speed, clamped to 1..=60 steps per second.
     fn update_fps(&mut self, new_fps: usize) {
-        // set limits on fps to be within 0 and 60. clip the values at those limits
         self.config.frame_duration = Duration::from_millis((1000 / new_fps.clamp(1, 60)) as u64);
         self.next_frame = Instant::now() + self.config.frame_duration;
     }
 
+    /// Web: make the HTML Play/Pause button match `is_paused` (its CSS class sets the colour).
     #[cfg(target_arch = "wasm32")]
     fn update_play_pause_ui(&self) {
         use wasm_bindgen::UnwrapThrowExt;
@@ -145,14 +177,15 @@ impl App {
         }
     }
 
+    /// Desktop has no button, so there's nothing to update.
     #[cfg(not(target_arch = "wasm32"))]
     fn update_play_pause_ui(&self) {
         // No-op for desktop version
     }
 
+    /// Advance exactly one generation. Only works while paused; when running,
+    /// the timer is already stepping.
     fn step_forward(&mut self) {
-        // need to check if we're paused, and if so, run a single compute update
-        // and render pass
         if !self.config.is_paused {
             return;
         }
@@ -161,6 +194,9 @@ impl App {
             gc.request_redraw();
         }
     }
+    /// Kill every cell and redraw straight away.
+    ///
+    /// Both buffers are overwritten, so we can safely reset `is_a_current` to A.
     fn reset_state(&mut self) {
         if let (Some(game_data), Some(graphics_context), Some(render_data)) = (
             &mut self.game_data,
@@ -169,23 +205,15 @@ impl App {
         ) {
             game_data.reset_grid_state(&self.config, &graphics_context.queue);
             game_data.is_a_current = true;
-            match graphics_context.render(
+            graphics_context.render(
                 render_data,
                 game_data.get_current_render_bind_group(),
                 &self.config,
-            ) {
-                Ok(_) => {}
-                Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
-                    let (width, height) = graphics_context.get_size().unwrap();
-                    graphics_context.resize(width, height);
-                }
-                Err(e) => {
-                    log::error!("Unable to render {e}");
-                }
-            }
+            );
         }
     }
 
+    /// Fill the grid randomly and redraw straight away.
     fn randomise_state(&mut self) {
         if let (Some(game_data), Some(graphics_context), Some(render_data)) = (
             &mut self.game_data,
@@ -194,54 +222,49 @@ impl App {
         ) {
             game_data.randomise_grid_state(&self.config, &graphics_context.queue);
             game_data.is_a_current = true;
-            match graphics_context.render(
+            graphics_context.render(
                 render_data,
                 game_data.get_current_render_bind_group(),
                 &self.config,
-            ) {
-                Ok(_) => {}
-                Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
-                    let (width, height) = graphics_context.get_size().unwrap();
-                    graphics_context.resize(width, height);
-                }
-                Err(e) => {
-                    log::error!("Unable to render {e}");
-                }
-            }
+            );
         }
     }
+    /// Keyboard shortcuts
     fn handle_key(&mut self, event_loop: &ActiveEventLoop, code: KeyCode, is_pressed: bool) {
         match (code, is_pressed) {
             (KeyCode::Escape, true) => event_loop.exit(),
             (KeyCode::Space, true) => self.play_pause(),
             (KeyCode::ArrowRight, true) => self.step_forward(),
             (KeyCode::KeyR, true) => self.reset_state(),
+            (KeyCode::KeyS, true) => self.randomise_state(),
             (_, _) => (),
         }
     }
 
+    /// Create the grid, the render pipeline, and the painter once the GPU is ready.
+    /// Does nothing if the [`GraphicsContext`] doesn't exist yet.
     fn setup_game_and_render_data(&mut self) {
         if let Some(graphics_context) = &self.graphics_context {
             let device = &graphics_context.device;
-            // use the graphics context to get the window dims which we will use to calculate the num
-            // of rows and columns of cells we want to start with
+            // Update the cell size and spacing configuration according to the window provided
+            // by the graphics context.
             self.config
                 .update_cell_configuration(&graphics_context.window);
             self.game_data = Some(GameData::new(device, &self.config));
-            // now that the graphics context is setup we can setup the render_pipeline if it's not there already
-            // setup the render stuff now that the window and surface configurations are made
 
-            let surface_config = &graphics_context.surface_config;
+            // Render pipeline. It needs the surface's pixel format and the grid's bind
+            // group layout.
             self.render_data = Some(
                 RenderData::new(
                     device,
-                    surface_config,
+                    &graphics_context.surface_config,
                     &GameData::get_render_bind_group_layout(device),
                     &self.config,
                 )
                 .unwrap(),
             );
 
+            // Painter. It reuses the grid's layouts so it can write into the same buffers.
             self.mouse = Some(MousePainter::new(
                 device,
                 &GameData::get_compute_bind_group_layout(device),
@@ -249,12 +272,14 @@ impl App {
                 &self.config,
                 graphics_context.window.clone(),
             ));
-            println!("got the gc set up and all");
+            log::info!("got the gc set up and all");
 
             // Initialize the play/pause button UI state
             self.update_play_pause_ui();
         }
     }
+    /// Desktop: replace the mouse cursor with a solid square about the size of one cell,
+    /// so you can see exactly what you'll paint. Called again on resize because cell size changes.
     #[cfg(not(target_arch = "wasm32"))]
     fn reset_cursor(&mut self, event_loop: &ActiveEventLoop) {
         if let Some(graphics_context) = &self.graphics_context {
@@ -264,9 +289,12 @@ impl App {
                 window_width as f32 / scale_factor,
                 window_height as f32 / scale_factor,
             );
+            // cell_size is in clip space, where the window is 2.0 wide, so
+            // pixels = window_pixels * cell_size / 2.
             let cursor_width = ((window_width * self.config.cell_size.0) / 2.0) as u16;
             let cursor_height = ((window_height * self.config.cell_size.1) / 2.0) as u16;
 
+            // One RGBA colour repeated for every pixel; the hotspot (click point) is the centre.
             let rgba_buffer: Vec<u8> = repeat_n(
                 self.config.cursor_color,
                 (cursor_width * cursor_height) as usize,
@@ -287,64 +315,67 @@ impl App {
     }
 }
 
-impl ApplicationHandler<AppEvents> for App {
+/// The event loop calls these methods. `AppEvent` is our custom event type for `user_event`.
+impl ApplicationHandler<AppEvent> for App {
+    /// The platform is ready for a window (at startup; on Android also after returning to the app).
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
         print!("resumed");
-        let window = graphics::get_window(event_loop);
-        // Now getting the window in wgpu is an asynchronous task because we're asking the GPU to get
-        // it for us, then we will use it
-        // This differs on web and desktop so we need two variants of this.
+        // 1. Create the window.
+        let window = graphics::get_window(event_loop, &self.config);
+        // 2. Connect to the GPU. Desktop: finishes right here. Web: finishes later in `user_event`.
         self.setup_graphics_context(window);
 
-        // we fill do these things after we have window size on web
+        // 3. Build the grid and pipelines. On the web the GPU isn't ready yet, so this does
+        //    nothing now and runs again once `NewGraphicsContext` arrives.
         self.setup_game_and_render_data();
 
+        // 4. Sleep until the first simulation step is due.
         self.next_frame = Instant::now() + self.config.frame_duration;
         event_loop.set_control_flow(winit::event_loop::ControlFlow::WaitUntil(self.next_frame));
     }
+    /// Handles our custom [`AppEvent`]: everything sent with `proxy.send_event(...)` ends up here.
     #[allow(unused_mut)]
-    fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: AppEvents) {
-        // This is where we handle events in the proxy.
-        // 'event' is state because of how we've parameterised the App.
-        // This is where the proxy.send_event() ends up
+    fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: AppEvent) {
         match event {
-            AppEvents::NewGraphicsContext(mut graphics_context) => {
+            AppEvent::NewGraphicsContext(mut graphics_context) => {
                 #[cfg(target_arch = "wasm32")]
                 {
-                    // On web, manually trigger resize to configure the surface
+                    // The canvas may already have its final size, so no `Resized` event will
+                    // come. Resize manually to configure the surface.
                     let (width, height) = graphics_context.get_window_size();
                     graphics_context.resize(width, height);
                     graphics_context.request_redraw();
                 }
-                // no logic needed for the desktop
-                // at this point our app is now setup once it's gotten the window and integrated it
-                // in the web / desktop
-                // in web after this I don't think we need the proxy because the async steps of getting the
-                // window  / canvas are done. The app is ready!
+                // The GPU is ready: store it and build everything that depends on it.
+                // (This event is only ever sent on the web; desktop sets up in `resumed`.)
                 self.graphics_context = Some(graphics_context);
                 self.setup_game_and_render_data();
             }
-            AppEvents::PlayPause => self.play_pause(),
-            AppEvents::UpdateFps(new_fps) => self.update_fps(new_fps),
-            AppEvents::StepForward => {
+            AppEvent::PlayPause => {
+                self.play_pause();
+                self.update_play_pause_ui();
+            }
+            AppEvent::UpdateFps(new_fps) => self.update_fps(new_fps),
+            AppEvent::StepForward => {
+                // Stepping pauses the simulation first if it's running.
                 if !self.config.is_paused {
                     self.play_pause();
                     self.update_play_pause_ui();
                 }
                 self.step_forward()
             }
-            AppEvents::RandomiseState => self.randomise_state(),
-            AppEvents::ResetState => self.reset_state(),
-            AppEvents::UpdatePlayPauseUI => self.update_play_pause_ui(),
-            _ => todo!(),
+            AppEvent::RandomiseState => self.randomise_state(),
+            AppEvent::ResetState => self.reset_state(),
         }
     }
+    /// Handles events from the window: close, resize, redraw, keyboard, mouse and touch.
     fn window_event(
         &mut self,
         event_loop: &winit::event_loop::ActiveEventLoop,
         _window_id: winit::window::WindowId,
         event: winit::event::WindowEvent,
     ) {
+        // Ignore window events until the GPU and painter are set up.
         let (graphics_context, mouse) = match (&mut self.graphics_context, &mut self.mouse) {
             (Some(gc), Some(mouse)) => (gc, mouse),
             (_, _) => return,
@@ -354,37 +385,31 @@ impl ApplicationHandler<AppEvents> for App {
             WindowEvent::CloseRequested => {
                 event_loop.exit();
             }
+            // The window changed size: resize the surface and update the pixel → cell mapping.
+            // The grid itself keeps its rows/cols; the cells just stretch.
             WindowEvent::Resized(size) => {
                 graphics_context.resize(size.width, size.height);
                 mouse.configure(&graphics_context.window, &self.config);
                 #[cfg(not(target_arch = "wasm32"))]
                 self.reset_cursor(event_loop);
             }
+            // Moved to a screen with a different DPI: logical pixel sizes changed.
             WindowEvent::ScaleFactorChanged {
                 scale_factor: _,
                 inner_size_writer: _,
             } => {
                 mouse.configure(&graphics_context.window, &self.config);
             }
+            // Sent after `request_redraw()`. All drawing happens here.
             WindowEvent::RedrawRequested => {
-                match graphics_context.render(
+                graphics_context.render(
                     self.render_data.as_ref().unwrap(),
                     self.game_data
                         .as_ref()
                         .unwrap()
                         .get_current_render_bind_group(),
                     &self.config,
-                ) {
-                    Ok(_) => {}
-                    Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
-                        let (width, height) = graphics_context.get_size().unwrap();
-                        graphics_context.resize(width, height);
-                    }
-                    Err(e) => {
-                        log::error!("Unable to render {e}");
-                    }
-                }
-                // graphics_context.update(self.render_data.as_mut().unwrap());
+                );
             }
             WindowEvent::KeyboardInput {
                 event:
@@ -395,6 +420,9 @@ impl ApplicationHandler<AppEvents> for App {
                     },
                 ..
             } => self.handle_key(event_loop, code, state.is_pressed()),
+            // --- Mouse painting ---
+            // Track whether the cursor is over the window and the left button is held.
+            // While both are true, each cursor move marks the cell under it in the paint mask.
             WindowEvent::CursorEntered { device_id: _ } => {
                 mouse.in_grid = true;
             }
@@ -420,7 +448,7 @@ impl ApplicationHandler<AppEvents> for App {
                 device_id: _,
                 position: phys_pos,
             } => {
-                // we only want to add positions to the buffer if in grid and pressed
+                // Always track the position (in logical pixels), but only paint while pressed.
                 if mouse.in_grid {
                     let logical_pos = phys_pos.to_logical(graphics_context.window.scale_factor());
 
@@ -430,7 +458,9 @@ impl ApplicationHandler<AppEvents> for App {
                     }
                 }
             }
-            // Touch events
+            // --- Touch painting ---
+            // Same idea as the mouse, but we follow one finger (by its id) from Started to Ended,
+            // so other fingers touching the screen are ignored.
             WindowEvent::Touch(Touch {
                 phase: TouchPhase::Started,
                 location,
@@ -478,17 +508,24 @@ impl ApplicationHandler<AppEvents> for App {
             _ => {}
         }
     }
+    /// Called when the event loop has handled all pending events and is about to sleep.
+    ///
+    /// This is our "game loop". Two independent timers:
+    /// - **paint** (`paint_fps`): upload painted cells to the GPU. Runs even when paused.
+    /// - **simulate** (`fps`): advance one generation. Only runs when not paused.
+    ///
+    /// Each one requests a redraw so the change shows up. Then we tell winit to sleep until
+    /// whichever timer is due next (`ControlFlow::WaitUntil`), instead of spinning the CPU.
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
         let now = Instant::now();
-        // paint logic here?
+        // Paint timer pushes painted cells into the current grid.
         if now >= self.next_paint_frame {
-            // we put this data into a staging buffer and add to our current_state_buffer
             if let (Some(gc), Some(mouse), Some(game_data)) = (
                 &mut self.graphics_context,
                 &mut self.mouse,
                 &mut self.game_data,
             ) {
-                _ = gc.paint(
+                gc.paint(
                     mouse,
                     &game_data.compute_uniform_bind_group,
                     game_data.get_current_compute_bind_group(),
@@ -498,8 +535,8 @@ impl ApplicationHandler<AppEvents> for App {
             }
             self.next_paint_frame = now + self.config.paint_frame_duration;
         }
+        // Simulation timer computes the next generation, then redraw.
         if now >= self.next_frame && !self.config.is_paused {
-            // if we're ready for next frame and not paused then we update and send redraw command
             if let (Some(gc), Some(game_data)) = (&mut self.graphics_context, &mut self.game_data) {
                 gc.update(game_data, &self.config);
                 gc.request_redraw();
@@ -507,12 +544,15 @@ impl ApplicationHandler<AppEvents> for App {
             self.next_frame = now + self.config.frame_duration;
         }
 
+        // Sleep until the sooner of the two timers.
         let next_deadline = cmp::min(self.next_frame, self.next_paint_frame);
         event_loop.set_control_flow(winit::event_loop::ControlFlow::WaitUntil(next_deadline));
     }
 }
 
+/// Start the app: set up logging, create the event loop, and hand it our [`App`].
 pub fn run() -> anyhow::Result<()> {
+    // Logging to the terminal on desktop, to the browser console on the web.
     #[cfg(not(target_arch = "wasm32"))]
     {
         env_logger::init();
@@ -522,9 +562,10 @@ pub fn run() -> anyhow::Result<()> {
         console_log::init_with_level(log::Level::Info).unwrap_throw();
     }
 
-    // re-emphasising that the 'event' is our state. we're calling a change to our state the event in the loop
-    let event_loop = EventLoop::<AppEvents>::with_user_event().build()?;
+    // An event loop that can also carry our custom `AppEvent` (see `user_event`).
+    let event_loop = EventLoop::<AppEvent>::with_user_event().build()?;
 
+    // Run it. On desktop `run_app` blocks until the window closes.
     #[cfg(not(target_arch = "wasm32"))]
     {
         let mut app = App::new()?;
@@ -533,10 +574,12 @@ pub fn run() -> anyhow::Result<()> {
 
     #[cfg(target_arch = "wasm32")]
     {
+        // Store a proxy globally so JS button handlers (`web_controls`) can send events.
         let proxy = event_loop.create_proxy();
         EVENT_LOOP_PROXY.with_borrow_mut(|p| *p = Some(proxy));
         let app = App::new(&event_loop)?;
-        // On web, run_app doesn't return normally, so we handle it differently
+        // The browser owns the real loop, so we can't block. `spawn_app` hands the app
+        // to the browser's event loop and returns immediately.
         use winit::platform::web::EventLoopExtWebSys;
         event_loop.spawn_app(app);
     }
@@ -544,9 +587,12 @@ pub fn run() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Web entry point. `#[wasm_bindgen(start)]` makes this run automatically when `index.js`
+/// calls `init()` to load the wasm module.
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen(start)]
 pub fn run_web() -> Result<(), wasm_bindgen::JsValue> {
+    // Show Rust panic messages in the browser console instead of a vague "unreachable" error.
     console_error_panic_hook::set_once();
 
     match run() {

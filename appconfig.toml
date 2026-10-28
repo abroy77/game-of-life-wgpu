@@ -1,9 +1,10 @@
 rows = 100
 cols = 100
-min_cell_array_len = 100
+min_cell_array_len = 125
 gap_ratio = 0.15
 fps = 20
-paint_fps = 120
+paint_fps = 60
 init_rand_threshold = 0.2
-background_color = [0,0,0,0]
-cursor_color = [255,0,0,255]
+background_color = [0, 0, 0, 0]
+cursor_color = [255, 0, 0, 255]
+desktop_size = [1200, 600]

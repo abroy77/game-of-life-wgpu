@@ -1,3 +1,10 @@
+//! Painting live cells with the mouse or a finger.
+//!
+//! Input events mark cells in a CPU-side **paint mask** (`Vec<u32>`, same layout as the grid).
+//! Every `paint_fps` run / tick, [`crate::graphics::GraphicsContext::paint()`] uploads the mask and runs
+//! `paint.wgsl`, which ORs it into the current grid. The mask is then cleared.
+//! Painting runs on its own timer, so you can draw smoothly even while the simulation is paused or slow.
+
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
 use winit::dpi::LogicalPosition;
@@ -5,18 +12,29 @@ use winit::window::Window;
 
 use crate::config::AppConfig;
 
+/// Input state plus the GPU resources for painting.
 pub struct MousePainter {
+    /// Is the cursor over the window?
     pub in_grid: bool,
+    /// Is the left button (or the tracked finger) held down?
     pub is_pressed: bool,
+    /// Last cursor position in logical pixels, origin top-left, y pointing down.
     pub pos: LogicalPosition<f64>,
+    /// Cells painted since the last upload: 1 = paint this cell alive.
     pub paint_buffer_cpu: Vec<u32>,
+    /// GPU copy of the paint mask, read by `paint.wgsl` at `@group(2)`.
     pub paint_buffer_gpu: wgpu::Buffer,
+    /// Logical pixels per cell in x and y. Dividing a cursor position by this gives a cell coordinate.
     pub array_div_factor: (f32, f32),
+    /// Compiled `paint.wgsl`.
     pub painter_pipeline: wgpu::ComputePipeline,
+    /// Bind group holding `paint_buffer_gpu`.
     pub painter_buffer_bind_group: wgpu::BindGroup,
+    /// The finger we're following on a touch screen, so a second finger doesn't jump the stroke.
     pub finger_id: Option<u64>,
 }
 
+/// Window size in logical pixels (physical pixels / display scale factor).
 fn get_window_logical_size(window: &Arc<Window>) -> (f32, f32) {
     let physical_size = window.inner_size();
     let scale_factor = window.scale_factor();
@@ -25,30 +43,28 @@ fn get_window_logical_size(window: &Arc<Window>) -> (f32, f32) {
     (x, y)
 }
 impl MousePainter {
+    /// Create the paint mask buffers and the paint compute pipeline.
+    ///
+    /// The two layouts passed in come from [`crate::game_data::GameData`], so the paint shader
+    /// can use the same uniform and grid bind groups as the simulation. Aha! finally a way to reuse something.
     pub fn new(
         device: &wgpu::Device,
-        //render buffer is bound at 0
+        // Grid buffers, `@group(1)`. The paint shader writes into binding 0 (current state).
         compute_bind_group_layout: &wgpu::BindGroupLayout,
-        // compute uniform bound at 0
+        // Grid size uniform, `@group(0)`.
         compute_uniform_bind_group_layout: &wgpu::BindGroupLayout,
         config: &AppConfig,
         window: Arc<Window>,
     ) -> Self {
         let array_div_factor = MousePainter::calc_array_div_factor(&window, config);
-        // so here we don't need a premade buffer. we will make it on the fly from our slice.
-        // do we need a buffer layout? nah
-        // we do need a bind group so we can bind 2 things in our paint shader
-        // 1. the uniform
-        // 2. the paint buffer
-        // 3. the current render buffer
-        //
-        // in our shader we will write to the current render_buffer, and the
-        // written value is the union of the render_buffer and the paint buffer.
-        // then we will re render the page.
-        //
-        //
-        // The buffer writing will take place at 60fps. decoupled from the update fps.
+        // The paint shader uses three bind groups:
+        //   @group(0) grid size uniform    (shared with the GameData)
+        //   @group(1) grid state buffers   (shared with the GameData, written to here as well)
+        //   @group(2) paint mask buffer    (created below)
+        // It does `state = state | paint_mask` for every cell.
 
+        // The paint mask buffer, all zeros. STORAGE so the shader can read it,
+        // COPY_DST so we can upload new strokes each paint tick.
         let paint_buffer = vec![0; config.num_elements()];
         let painter_buffer_gpu = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Painter Buffer"),
@@ -56,6 +72,7 @@ impl MousePainter {
             usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::STORAGE,
         });
 
+        // Layout and bind group for the paint mask (`@group(2) @binding(0)`). The shader only reads it.
         let painter_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("Painter Bind Group Layout"),
@@ -80,17 +97,19 @@ impl MousePainter {
             }],
         });
 
+        // Pipeline layout in @group order: uniform, grid, paint mask.
         let painter_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Painter Pipeline Layout"),
                 bind_group_layouts: &[
-                    compute_uniform_bind_group_layout,
-                    compute_bind_group_layout,
-                    &painter_bind_group_layout,
+                    Some(compute_uniform_bind_group_layout),
+                    Some(compute_bind_group_layout),
+                    Some(&painter_bind_group_layout),
                 ],
-                push_constant_ranges: &[],
+                immediate_size: 0,
             });
 
+        // Compile the shader and build the compute pipeline.
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Painter shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("shaders/paint.wgsl").into()),
@@ -119,21 +138,20 @@ impl MousePainter {
             finger_id,
         }
     }
-    // set the cell array position to 1
+    /// Mark the cell under the cursor (`self.pos`) in the paint mask.
     pub fn add_to_buffer(&mut self, config: &AppConfig) {
-        // we need to convert the physical coords into the array index for the cell
+        // Convert the logical pixel position into a column and row.
         let (div_x, div_y) = self.array_div_factor;
         let x = (self.pos.x as f32 / div_x) as usize;
         if x >= config.cols {
             return;
         }
-        // we do this because NDC is from down to up in y.
-        // but the window coordinates are top to bottom
-        // need to do a checked subtraction to prevent overflow issues
+        // Window y goes top → bottom, but the grid's row 0 is at the bottom (clip space y points up),
+        // so we flip it. `checked_sub` avoids underflow if the cursor is below the bottom most row.
         let y = (config.rows - 1).checked_sub((self.pos.y as f32 / div_y) as usize);
 
         if let Some(y) = y {
-            // now get the array_pos:
+            // Same row-by-row indexing as the grid buffers.
             let array_pos = x + config.cols * y;
 
             if array_pos < self.paint_buffer_cpu.len() {
@@ -149,9 +167,14 @@ impl MousePainter {
             log::warn!("Invalid Y coordinate calculation");
         }
     }
+    /// Zero the paint mask after it has been uploaded.
+    /// #TODO: this is currently quite a heavy operation to be doing for each paint pass.
+    /// Need to find a better way to encode and send the paint buffer points to GPU. maybe as indices perhaps?
+    /// rather than the whole mask? that way when there's no painting then I can just not do this clear step.
     pub fn clear_buffer(&mut self) {
         self.paint_buffer_cpu.iter_mut().for_each(|x| *x = 0);
     }
+    /// Logical pixels per cell: window size divided by the number of columns/rows.
     pub fn calc_array_div_factor(window: &Arc<Window>, config: &AppConfig) -> (f32, f32) {
         let window_size = get_window_logical_size(window);
         (
@@ -159,11 +182,12 @@ impl MousePainter {
             window_size.1 / config.rows as f32,
         )
     }
+    /// Recompute the pixel → cell mapping. Call when the window is resized or its scale changes.
     pub fn configure(&mut self, window: &Arc<Window>, config: &AppConfig) {
         self.array_div_factor = MousePainter::calc_array_div_factor(window, config);
     }
-    // configure the buffer size and the div factor when we resize the window
-    // or change num elements.
+    /// Upload the CPU paint mask to the GPU buffer.
+    /// #TODO: also a very heavy operation, definitely should be some way to improve this.
     pub fn write_to_buffer(&mut self, queue: &wgpu::Queue) {
         queue.write_buffer(
             &self.paint_buffer_gpu,
