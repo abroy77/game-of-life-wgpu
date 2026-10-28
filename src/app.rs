@@ -428,6 +428,7 @@ impl ApplicationHandler<AppEvent> for App {
             }
             WindowEvent::CursorLeft { device_id: _ } => {
                 mouse.in_grid = false;
+                mouse.previous_paint_cell = None;
             }
             WindowEvent::MouseInput {
                 device_id: _,
@@ -435,6 +436,7 @@ impl ApplicationHandler<AppEvent> for App {
                 button: MouseButton::Left,
             } => {
                 mouse.is_pressed = false;
+                mouse.previous_paint_cell = None;
             }
             WindowEvent::MouseInput {
                 device_id: _,
@@ -473,6 +475,7 @@ impl ApplicationHandler<AppEvent> for App {
                     mouse.pos = location.to_logical(graphics_context.window.scale_factor());
                     mouse.is_pressed = true;
                     mouse.in_grid = true;
+                    mouse.add_to_buffer(&self.config);
                 }
             }
             WindowEvent::Touch(Touch {
@@ -487,6 +490,22 @@ impl ApplicationHandler<AppEvent> for App {
                     mouse.finger_id = None;
                     mouse.is_pressed = false;
                     mouse.in_grid = false;
+                    mouse.previous_paint_cell = None;
+                }
+            }
+            WindowEvent::Touch(Touch {
+                phase: TouchPhase::Cancelled,
+                id: finger_id,
+                ..
+            }) => {
+                // if we get a touch phase cancelled event for the registered id, we say we're not pressing anymore
+                if let Some(mouse_finger_id) = mouse.finger_id
+                    && mouse_finger_id == finger_id
+                {
+                    mouse.finger_id = None;
+                    mouse.is_pressed = false;
+                    mouse.in_grid = false;
+                    mouse.previous_paint_cell = None;
                 }
             }
             WindowEvent::Touch(Touch {
