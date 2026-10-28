@@ -386,7 +386,7 @@ impl GraphicsContext {
 }
 
 /// Create the app window:  attached to the page's `<canvas id="canvas">` on the web.
-pub fn get_window(event_loop: &ActiveEventLoop) -> Arc<Window> {
+pub fn get_window(event_loop: &ActiveEventLoop, config: &AppConfig) -> Arc<Window> {
     #[allow(unused_mut)]
     let mut window_attributes = Window::default_attributes();
 
@@ -399,8 +399,10 @@ pub fn get_window(event_loop: &ActiveEventLoop) -> Arc<Window> {
     #[cfg(not(target_arch = "wasm32"))]
     {
         // For native, use a reasonable default size
-        // #TODO: make this a configurable value
-        window_attributes = window_attributes.with_inner_size(PhysicalSize::new(800, 600));
+        window_attributes = window_attributes.with_inner_size(PhysicalSize::new(
+            config.desktop_size[0],
+            config.desktop_size[1],
+        ));
     }
 
     // winit windows can only be created from inside the running event loop.

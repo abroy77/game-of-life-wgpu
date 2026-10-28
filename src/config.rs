@@ -46,6 +46,8 @@ pub struct RawConfig {
     pub background_color: [u8; 4],
     /// Cursor RGBA colour on desktop, 0-255 per channel.
     pub cursor_color: [u8; 4],
+    /// desktop window default size
+    pub desktop_size: [u32; 2],
 }
 
 /// The settings the app actually uses: [`RawConfig`] values plus numbers derived from them.
@@ -78,6 +80,7 @@ pub struct AppConfig {
     /// Background colour: f64 channels in 0..1.
     pub background_color: wgpu::Color,
     pub cursor_color: [u8; 4],
+    pub desktop_size: [u32; 2],
 }
 
 impl From<RawConfig> for AppConfig {
@@ -124,6 +127,7 @@ impl From<RawConfig> for AppConfig {
             background_color,
             cursor_color: value.cursor_color,
             min_cell_array_len: value.min_cell_array_len,
+            desktop_size: value.desktop_size,
         }
     }
 }

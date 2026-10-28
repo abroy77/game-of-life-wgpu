@@ -321,7 +321,7 @@ impl ApplicationHandler<AppEvent> for App {
     fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
         print!("resumed");
         // 1. Create the window.
-        let window = graphics::get_window(event_loop);
+        let window = graphics::get_window(event_loop, &self.config);
         // 2. Connect to the GPU. Desktop: finishes right here. Web: finishes later in `user_event`.
         self.setup_graphics_context(window);
 
