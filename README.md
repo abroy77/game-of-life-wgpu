@@ -73,3 +73,7 @@ This project includes GitHub Actions for automatic deployment to GitHub Pages:
 1. **Push to main branch** triggers the build
 2. **Rust + wasm-pack** builds the WASM module
 3. **GitHub Pages** serves the static files
+
+## References:
+
+- [Bresenham's Line Algorithm](https://www.youtube.com/watch?v=CceepU1vIKo)

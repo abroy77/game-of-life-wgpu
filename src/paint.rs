@@ -2,7 +2,7 @@
 //!
 //! Input events mark cells in a CPU-side **paint mask** (`Vec<u32>`, same layout as the grid).
 //! Every `paint_fps` run / tick, [`crate::graphics::GraphicsContext::paint()`] uploads the mask and runs
-//! `paint.wgsl`, which ORs it into the current grid. The mask is then cleared.
+//! `paint.wgsl`, which sets painted cells to newborns (1) in the current grid. The mask is then cleared.
 //! Painting runs on its own timer, so you can draw smoothly even while the simulation is paused or slow.
 
 use std::sync::Arc;

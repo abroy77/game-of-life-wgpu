@@ -48,6 +48,9 @@ pub struct RawConfig {
     pub cursor_color: [u8; 4],
     /// desktop window default size
     pub desktop_size: [u32; 2],
+    /// Number of colours in the age gradient (green → blue). A cell aged `a` uses colour
+    /// `min(a, color_steps - 1)`, so all cells that old or older share the last colour.
+    pub color_steps: usize,
 }
 
 /// The settings the app actually uses: [`RawConfig`] values plus numbers derived from them.
@@ -81,6 +84,7 @@ pub struct AppConfig {
     pub background_color: wgpu::Color,
     pub cursor_color: [u8; 4],
     pub desktop_size: [u32; 2],
+    pub color_steps: usize,
 }
 
 impl From<RawConfig> for AppConfig {
@@ -128,6 +132,7 @@ impl From<RawConfig> for AppConfig {
             cursor_color: value.cursor_color,
             min_cell_array_len: value.min_cell_array_len,
             desktop_size: value.desktop_size,
+            color_steps: value.color_steps.max(1),
         }
     }
 }
