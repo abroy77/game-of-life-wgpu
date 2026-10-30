@@ -1,4 +1,5 @@
 pub mod app;
+pub mod colormap;
 pub mod config;
 pub mod game_data;
 pub mod graphics;

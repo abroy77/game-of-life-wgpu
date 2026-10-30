@@ -2,6 +2,8 @@
 //
 // Runs once per cell, all in parallel. Each GPU thread handles one cell:
 // count its live neighbours in `current_state`, apply the rules, write the result to `next_state`.
+// If the cell was alive previously, increment the current_state value.
+// Current state values are clamped at `color_steps` for coloring in the vertex shader.
 // Reading from one buffer and writing to another means no thread ever sees a half-updated grid.
 // Dispatched from `GraphicsContext::update` (graphics.rs).
 
@@ -9,7 +11,8 @@
 struct GridInfo {
     rows: u32,
     cols: u32,
-    _pad: vec2<u32>,
+    color_steps: u32,
+    _pad: u32,
 }
 
 // @group(N) @binding(M) must match the bind group layouts on the Rust side:
@@ -17,7 +20,7 @@ struct GridInfo {
 @group(0) @binding(0)
 var<uniform> grid: GridInfo;
 
-// The grid as a flat array, row by row from the bottom. 1 = alive, 0 = dead.
+// The grid as a flat array, row by row from the bottom. 0 = dead, n ≥ 1 = alive with age n - 1.
 @group(1) @binding(0)
 var<storage, read_write> current_state: array<u32>;
 @group(1) @binding(1)
@@ -37,6 +40,7 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let state_index = pos_to_index(pos);
 
     let state = current_state[state_index];
+    let alive = state != 0;
 
     // Apply the rules:
     // - exactly 3 neighbours → alive
@@ -44,10 +48,9 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     // - anything else → dead
     let n_neighbors = count_alive_neighbours(pos);
     var next: u32 = 0u;
-    if n_neighbors == 3u {
-        next = 1u;
-    } else if state == 1u && n_neighbors == 2u {
-        next = 1u;
+    if n_neighbors == 3u || (alive && n_neighbors == 2u) {
+        // newborn → 1, survivor → +1, capped so state - 1 is always a valid colour index
+        next = select(1u, min(state + 1u, grid.color_steps), alive);
     }
 
     // Write to the next_state buffer.

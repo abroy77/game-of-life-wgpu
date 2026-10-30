@@ -1,4 +1,4 @@
-// Painting: sets every cell marked in the paint mask to alive.
+// Painting: sets every cell marked in the paint mask to a newborn (1).
 //
 // Runs once per cell, like compute.wgsl. Dispatched from `GraphicsContext::paint()` (graphics.rs)
 // with the same uniform (group 0) and grid (group 1) bind groups as the simulation, plus
@@ -8,7 +8,8 @@
 struct GridInfo {
     rows: u32,
     cols: u32,
-    _pad: vec2<u32>,
+    color_steps: u32,
+    _pad: u32,
 }
 
 @group(0) @binding(0)
@@ -33,9 +34,8 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
     let idx = pos_to_index(pos);
 
-    // Bitwise OR: painted cells become alive, everything else is unchanged.
-    // Painting never kills a cell.
-    current_state[idx] = current_state[idx] | paint_buffer[idx];
+    // Painted cells become newborns (1, resetting any age); others are unchanged.
+    current_state[idx] = select(current_state[idx], 1u, paint_buffer[idx] != 0u);
     return;
 }
 

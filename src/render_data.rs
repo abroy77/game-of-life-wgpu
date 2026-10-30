@@ -4,6 +4,7 @@
 use wgpu::{BufferUsages, util::DeviceExt};
 
 use crate::{
+    colormap::{ColorEncoding, make_colormap},
     config::AppConfig,
     graphics::RenderUniform,
     vertex::{CELL_VERTICES, INDICES, Instance, Vertex, get_instances},
@@ -19,7 +20,7 @@ pub struct RenderData {
     pub index_buffer: wgpu::Buffer,
     /// One centre position per cell ([`get_instances`]).
     pub instance_buffer: wgpu::Buffer,
-    /// The cell size uniform, at `@group(0)` in `render.wgsl`.
+    /// `@group(0)` in `render.wgsl`: cell size uniform (binding 0) and age colormap (binding 1).
     pub render_uniform_bind_group: wgpu::BindGroup,
 }
 
@@ -66,28 +67,60 @@ impl RenderData {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
+        // Age → colour table (`@group(0) @binding(1)`). sRGB surfaces need linear colours.
+        let encoding = if surface_config.format.is_srgb() {
+            ColorEncoding::Linear
+        } else {
+            ColorEncoding::Srgb
+        };
+        let colormap = make_colormap(config.color_steps, encoding);
+        let colormap_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Age Colormap Buffer"),
+            contents: bytemuck::cast_slice(&colormap),
+            usage: wgpu::BufferUsages::STORAGE,
+        });
+
         let render_uniform_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("Render Uniform Bind Group Layout"),
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
                     },
-                    count: None,
-                }],
+                    // colormap: read-only, only the vertex shader needs it
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::VERTEX,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: true },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                ],
             });
 
         let render_uniform_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Render Uniform Bind Group"),
             layout: &render_uniform_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: uniform_buffer.as_entire_binding(),
-            }],
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: uniform_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: colormap_buffer.as_entire_binding(),
+                },
+            ],
         });
 
         // Pipeline layout: group 0 = cell size uniform, group 1 = grid state.
@@ -148,7 +181,7 @@ impl RenderData {
                 entry_point: Some("fs_main"),
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
                 // Write into a texture with the surface's format. Alpha blending mixes our
-                // colour with the background by its alpha, so dead cells (alpha 0) are invisible.
+                // colour with the background by its alpha (cell colours are opaque).
                 targets: &[Some(wgpu::ColorTargetState {
                     format: surface_config.format,
                     blend: Some(wgpu::BlendState::ALPHA_BLENDING),

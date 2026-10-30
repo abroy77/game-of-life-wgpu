@@ -19,7 +19,8 @@ use crate::config::AppConfig;
 ///   groups with the same layout and switch between them cheaply, which is how we swap A and B.
 pub struct GameData {
     rng: ThreadRng,
-    /// One copy of the grid: `rows * cols` `u32`s, 1 = alive, 0 = dead, row by row from the bottom.
+    /// One copy of the grid: `rows * cols` `u32`s, row by row from the bottom.
+    /// 0 = dead, n ≥ 1 = alive with age n - 1 (capped at `color_steps`, used to pick its colour).
     pub game_state_buffer_a: wgpu::Buffer,
     /// The other copy of the grid.
     pub game_state_buffer_b: wgpu::Buffer,
@@ -40,7 +41,8 @@ pub struct GameData {
     pub compute_pipeline: wgpu::ComputePipeline,
 }
 
-/// Grid dimensions for the compute shaders. Matches `struct GridInfo` in `compute.wgsl`.
+/// Grid dimensions and the age cap (`color_steps`) for the compute shaders.
+/// Matches `struct GridInfo` in `compute.wgsl` and `paint.wgsl`.
 ///
 /// Sent as a **uniform** buffer: small, read-only data that's the same for every GPU thread.
 /// (Compare with **storage** buffers, used for the grid: large, indexable, and can be written.)
@@ -50,17 +52,19 @@ pub struct GameData {
 #[repr(C, align(16))]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct ComputeUniform {
-    rows: u32,      // 4 bytes
-    cols: u32,      // 8 bytes
-    _pad: [u32; 2], // 16 bytes
+    rows: u32,        // 4 bytes
+    cols: u32,        // 8 bytes
+    color_steps: u32, // 12 bytes
+    _pad: u32,        // 16 bytes
 }
 
 impl ComputeUniform {
-    pub fn new(rows: u32, cols: u32) -> Self {
+    pub fn new(rows: u32, cols: u32, color_steps: usize) -> Self {
         Self {
             rows,
             cols,
-            _pad: [0; 2],
+            color_steps: color_steps as u32,
+            _pad: 0,
         }
     }
 }
@@ -94,7 +98,8 @@ impl GameData {
         });
 
         // Uniform buffer and its bind group (`@group(0)` in the shader).
-        let compute_uniform = ComputeUniform::new(config.rows as u32, config.cols as u32);
+        let compute_uniform =
+            ComputeUniform::new(config.rows as u32, config.cols as u32, config.color_steps);
         let compute_uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: None,
             contents: bytemuck::bytes_of(&compute_uniform),

@@ -322,8 +322,8 @@ impl GraphicsContext {
             );
 
             // One draw call for the whole grid: draw the 6-index square once per cell
-            // (instances 0..rows*cols). The fragment shader reads the grid state to decide
-            // whether each cell is alive (white) or dead (transparent).
+            // (instances 0..rows*cols). The vertex shader reads each cell's age to pick its
+            // colour, and collapses dead cells so they draw nothing.
             render_pass.draw_indexed(0..INDICES.len() as u32, 0, 0..config.num_elements() as u32);
         }
         // Send the commands to the GPU, then hand the finished frame to the screen.
