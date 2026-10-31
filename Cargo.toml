@@ -19,6 +19,9 @@ serde = { version = "1.0.229", features = ["derive"] }
 wgpu = "30.0.1"
 winit = { version = "0.30.13", features = ["android-native-activity"] }
 
+[dev-dependencies]
+naga = { version = "30.0.1", features = ["wgsl-in"] }
+
 [target.'cfg(target_arch="wasm32")'.dependencies]
 console_error_panic_hook = "0.1.7"
 console_log = "1.1.0"
