@@ -173,9 +173,9 @@ pub fn load_config() -> AppConfig {
         .expect("Config object should build successfully")
         .try_deserialize()
         .expect("RawConfig object should build successfully");
-    log::info!("Raw Config:\n{:?}", &raw_config);
+    log::info!("Raw Config:\n{:?}", raw_config);
     let app_config: AppConfig = raw_config.into();
-    log::info!("App Config:\n{:?}", &app_config);
+    log::info!("App Config:\n{:?}", app_config);
     app_config
 }
 
