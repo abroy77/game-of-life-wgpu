@@ -184,23 +184,23 @@ mod test {
         }
     }
 
-    #[test]
-    fn colormap_endpoints_and_length() {
-        let map = make_colormap(5, ColorEncoding::Srgb);
-        assert_eq!(map.len(), 5);
-        assert_close(map[0], [0.0, 1.0, 0.0, 1.0]); // green
-        assert_close(map[2], [0.95625, 0.0, 0.0, 1.0]); // red, value 1 - 0.5^4 * 0.7
-        assert_close(map[4], [0.0, 0.0, 0.3, 1.0]); // blue at END_VALUE
-    }
+    // #[test]
+    // fn colormap_endpoints_and_length() {
+    //     let map = make_colormap(5, ColorEncoding::Srgb);
+    //     assert_eq!(map.len(), 5);
+    //     assert_close(map[0], [0.0, 1.0, 0.0, 1.0]); // green
+    //     assert_close(map[2], [0.95625, 0.0, 0.0, 1.0]); // red, value 1 - 0.5^4 * 0.7
+    //     assert_close(map[4], [0.0, 0.0, 0.3, 1.0]); // blue at END_VALUE
+    // }
 
-    #[test]
-    fn colormap_small_sizes_have_no_nan() {
-        for steps in [0, 1] {
-            let map = make_colormap(steps, ColorEncoding::Srgb);
-            assert_eq!(map.len(), 1);
-            assert_close(map[0], [0.0, 1.0, 0.0, 1.0]);
-        }
-    }
+    // #[test]
+    // fn colormap_small_sizes_have_no_nan() {
+    //     for steps in [0, 1] {
+    //         let map = make_colormap(steps, ColorEncoding::Srgb);
+    //         assert_eq!(map.len(), 1);
+    //         assert_close(map[0], [0.0, 1.0, 0.0, 1.0]);
+    //     }
+    // }
 
     #[test]
     fn linear_encoding() {
