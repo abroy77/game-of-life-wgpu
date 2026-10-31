@@ -334,10 +334,10 @@ impl GraphicsContext {
             self.resize_to_window();
         }
     }
-    /// Push the cells painted since the last call into the grid on the GPU.
+    /// Push the strokes painted since the last call into the grid on the GPU.
     ///
-    /// Uploads the CPU paint mask, clears it ready for new strokes, then runs `paint.wgsl`,
-    /// which sets every painted cell alive (`state |= paint`).
+    /// Uploads the queued segments, clears them ready for new strokes, then runs `paint.wgsl`,
+    /// which sets every cell along each segment alive. Does nothing if nothing was painted.
     ///
     /// `game_state_compute_bind_group` is [`GameData::get_current_compute_bind_group`]: the
     /// compute bindings, because the paint shader writes to the grid.
@@ -346,16 +346,16 @@ impl GraphicsContext {
         mouse_painter: &mut MousePainter,
         compute_uniform_bind_group: &wgpu::BindGroup,
         game_state_compute_bind_group: &wgpu::BindGroup,
-        config: &AppConfig,
     ) {
         if !self.is_surface_configured {
             // don't render unless surface is configured
             log::warn!("Surface not ready for painting");
             return;
         }
-        // Upload the paint mask to the GPU, then clear the CPU copy for the next strokes.
-        mouse_painter.write_to_buffer(&self.queue);
-        mouse_painter.clear_buffer();
+        // Upload the segments; skip the pass entirely if there's nothing to paint.
+        let Some((steps, segments)) = mouse_painter.write_to_buffer(&self.queue) else {
+            return;
+        };
 
         let mut encoder = self
             .device
@@ -363,7 +363,7 @@ impl GraphicsContext {
                 label: Some("Painter Encoder"),
             });
 
-        // A compute pass like in `update`, with a third bind group for the paint mask.
+        // A compute pass like in `update`, with a third bind group for the paint segments.
         {
             let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: Some("Compute Pass"),
@@ -374,11 +374,8 @@ impl GraphicsContext {
             compute_pass.set_bind_group(0, compute_uniform_bind_group, &[]);
             compute_pass.set_bind_group(1, game_state_compute_bind_group, &[]);
             compute_pass.set_bind_group(2, &mouse_painter.painter_buffer_bind_group, &[]);
-            compute_pass.dispatch_workgroups(
-                config.compute_dispatches[0] as u32,
-                config.compute_dispatches[1] as u32,
-                1,
-            );
+            // x: points along a segment, y: segments. (64, 1) = @workgroup_size in paint.wgsl.
+            compute_pass.dispatch_workgroups(steps.div_ceil(64), segments, 1);
         }
         // Submit. `queue.write_buffer()` above is guaranteed to finish before this runs.
         self.queue.submit(std::iter::once(encoder.finish()));

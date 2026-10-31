@@ -1,8 +1,8 @@
-// Painting: sets every cell marked in the paint mask to a newborn (1).
+// Painting: draws this tick's stroke segments into the grid, setting their cells to newborns (1).
 //
-// Runs once per cell, like compute.wgsl. Dispatched from `GraphicsContext::paint()` (graphics.rs)
-// with the same uniform (group 0) and grid (group 1) bind groups as the simulation, plus
-// the paint mask (group 2) from `MousePainter`.
+// One thread per (point along a segment, segment), using the DDA line algorithm.
+// Dispatched from `GraphicsContext::paint()` (graphics.rs) with the same uniform (group 0)
+// and grid (group 1) bind groups as the simulation, plus the segments (group 2) from `MousePainter`.
 
 // Grid size. Matches `ComputeUniform` in game_data.rs.
 struct GridInfo {
@@ -12,6 +12,18 @@ struct GridInfo {
     _pad: u32,
 }
 
+// Line from cell `a` to cell `b`. Matches `Segment` in paint.rs.
+struct Segment {
+    a: vec2<i32>,
+    b: vec2<i32>,
+}
+
+// count at byte 0, 4 bytes padding, segments at byte 8 (vec2<i32> aligns to 8). CPU must match.
+struct Path {
+    count: u32,
+    segments: array<Segment>,
+}
+
 @group(0) @binding(0)
 var<uniform> grid: GridInfo;
 
@@ -19,24 +31,44 @@ var<uniform> grid: GridInfo;
 @group(1) @binding(0)
 var<storage, read_write> current_state: array<u32>;
 
-// The paint mask uploaded from the CPU: 1 = paint this cell alive.
+// This tick's segments, uploaded by `MousePainter::write_to_buffer`.
 @group(2) @binding(0)
-var<storage, read> paint_buffer: array<u32>;
+var<storage, read> path: Path;
 
-@compute @workgroup_size(16, 16, 1)
-fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
-    let pos = vec2<i32>(i32(global_id.x), i32(global_id.y));
-
-    // Threads past the grid edge do nothing (see compute.wgsl).
-    if !pos_in_grid(pos) {
+// Must match the div_ceil(64) dispatch in `GraphicsContext::paint()`.
+@compute @workgroup_size(64, 1, 1)
+fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+    // x will handle steps in a segment
+    // y will handle segments
+    if gid.y >= path.count {
         return;
     }
 
-    let idx = pos_to_index(pos);
+    let seg = path.segments[gid.y];
+
+    let d = seg.b - seg.a;
+    let steps = max(abs(d.x), abs(d.y));
+    // x handles steps so we only need those within our step count
+    if gid.x > u32(steps) {
+        return;
+    }
+
+    // for this gid.x, how far along the segment are we? from 0-1
+    // where 0 is at seg.a, and 1 is at seg.b
+    let step_fraction = select(0.0, f32(gid.x) / f32(steps), steps > 0);
+
+    // mix() linearly interpolates a → b (per component) at step_fraction;
+    // round() snaps that exact point to the nearest cell.
+    let position = vec2<i32>(round(mix(vec2<f32>(seg.a), vec2<f32>(seg.b), step_fraction)));
+
+    if !pos_in_grid(position) {
+        return;
+    }
+
+    let state_index = pos_to_index(position);
 
     // Painted cells become newborns (1, resetting any age); others are unchanged.
-    current_state[idx] = select(current_state[idx], 1u, paint_buffer[idx] != 0u);
-    return;
+    current_state[state_index] = 1u;
 }
 
 // Same helpers as compute.wgsl (WGSL has no imports, so they're copied).

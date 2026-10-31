@@ -1,16 +1,23 @@
 //! Painting live cells with the mouse or a finger.
 //!
-//! Input events mark cells in a CPU-side **paint mask** (`Vec<u32>`, same layout as the grid).
-//! Every `paint_fps` run / tick, [`crate::graphics::GraphicsContext::paint()`] uploads the mask and runs
-//! `paint.wgsl`, which sets painted cells to newborns (1) in the current grid. The mask is then cleared.
+//! Input events append line segments (previous cell → current cell) to a CPU list.
+//! Every `paint_fps` tick, [`crate::graphics::GraphicsContext::paint()`] uploads them and runs
+//! `paint.wgsl`, which draws each segment with the DDA (Digital Differential Analyzer) line
+//! algorithm, setting its cells to newborns (1). If nothing was painted, the pass is skipped.
 //! Painting runs on its own timer, so you can draw smoothly even while the simulation is paused or slow.
 
+use std::num::NonZeroU64;
 use std::sync::Arc;
-use wgpu::util::DeviceExt;
 use winit::dpi::LogicalPosition;
 use winit::window::Window;
 
 use crate::config::AppConfig;
+
+/// Max segments per paint tick; very hard for a human to exceed this.
+const MAX_SEGMENTS: usize = 1024;
+
+/// `Path` header in paint.wgsl: count + 4 bytes padding so the array is 8-byte aligned.
+const HEADER_BYTES: u64 = 8;
 
 /// Input state plus the GPU resources for painting.
 pub struct MousePainter {
@@ -20,9 +27,9 @@ pub struct MousePainter {
     pub is_pressed: bool,
     /// Last cursor position in logical pixels, origin top-left, y pointing down.
     pub pos: LogicalPosition<f64>,
-    /// Cells painted since the last upload: 1 = paint this cell alive.
-    pub paint_buffer_cpu: Vec<u32>,
-    /// GPU copy of the paint mask, read by `paint.wgsl` at `@group(2)`.
+    /// Segments painted since the last upload.
+    pub segments: Vec<Segment>,
+    /// GPU copy of the paint buffer, read by `paint.wgsl` at `@group(2)`.
     pub paint_buffer_gpu: wgpu::Buffer,
     /// Logical pixels per cell in x and y. Dividing a cursor position by this gives a cell coordinate.
     pub array_div_factor: (f32, f32),
@@ -36,6 +43,22 @@ pub struct MousePainter {
     /// Reverts to None when a stroke ends.
     pub previous_paint_cell: Option<(usize, usize)>,
 }
+/// Line segment from cell `a` to cell `b`. Matches `Segment` in paint.wgsl.
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct Segment {
+    a: [i32; 2],
+    b: [i32; 2],
+}
+
+impl Segment {
+    /// DDA steps from `a` to `b`: the length along the longer axis.
+    fn steps(&self) -> u32 {
+        self.a[0]
+            .abs_diff(self.b[0])
+            .max(self.a[1].abs_diff(self.b[1]))
+    }
+}
 
 /// Window size in logical pixels (physical pixels / display scale factor).
 fn get_window_logical_size(window: &Arc<Window>) -> (f32, f32) {
@@ -46,7 +69,7 @@ fn get_window_logical_size(window: &Arc<Window>) -> (f32, f32) {
     (x, y)
 }
 impl MousePainter {
-    /// Create the paint mask buffers and the paint compute pipeline.
+    /// Create the paint buffers and the paint compute pipeline.
     ///
     /// The two layouts passed in come from [`crate::game_data::GameData`], so the paint shader
     /// can use the same uniform and grid bind groups as the simulation. Aha! finally a way to reuse something.
@@ -63,19 +86,20 @@ impl MousePainter {
         // The paint shader uses three bind groups:
         //   @group(0) grid size uniform    (shared with the GameData)
         //   @group(1) grid state buffers   (shared with the GameData, written to here as well)
-        //   @group(2) paint mask buffer    (created below)
-        // It does `state = state | paint_mask` for every cell.
+        //   @group(2) paint buffer         (created below)
+        // It sets every cell along each uploaded segment to 1.
 
-        // The paint mask buffer, all zeros. STORAGE so the shader can read it,
-        // COPY_DST so we can upload new strokes each paint tick.
-        let paint_buffer = vec![0; config.num_elements()];
-        let painter_buffer_gpu = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        // The paint buffer: a fixed-size header + MAX_SEGMENTS segments. STORAGE so the shader
+        // can read it, COPY_DST so we can upload new strokes each paint tick.
+        let segments = Vec::with_capacity(MAX_SEGMENTS);
+        let paint_buffer_gpu = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Painter Buffer"),
-            contents: bytemuck::cast_slice(&paint_buffer),
+            size: HEADER_BYTES + (MAX_SEGMENTS * size_of::<Segment>()) as u64,
             usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::STORAGE,
+            mapped_at_creation: false,
         });
 
-        // Layout and bind group for the paint mask (`@group(2) @binding(0)`). The shader only reads it.
+        // Layout and bind group for the paint buffer (`@group(2) @binding(0)`). The shader only reads it.
         let painter_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("Painter Bind Group Layout"),
@@ -85,7 +109,9 @@ impl MousePainter {
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Storage { read_only: true },
                         has_dynamic_offset: false,
-                        min_binding_size: None,
+                        min_binding_size: NonZeroU64::new(
+                            HEADER_BYTES + size_of::<Segment>() as u64,
+                        ),
                     },
                     count: None,
                 }],
@@ -96,11 +122,11 @@ impl MousePainter {
             layout: &painter_bind_group_layout,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
-                resource: painter_buffer_gpu.as_entire_binding(),
+                resource: paint_buffer_gpu.as_entire_binding(),
             }],
         });
 
-        // Pipeline layout in @group order: uniform, grid, paint mask.
+        // Pipeline layout in @group order: uniform, grid, paint buffer.
         let painter_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Painter Pipeline Layout"),
@@ -133,8 +159,8 @@ impl MousePainter {
             in_grid: false,
             is_pressed: false,
             pos: LogicalPosition { x: 0.0, y: 0.0 },
-            paint_buffer_cpu: paint_buffer,
-            paint_buffer_gpu: painter_buffer_gpu,
+            segments,
+            paint_buffer_gpu,
             array_div_factor,
             painter_pipeline,
             painter_buffer_bind_group,
@@ -142,21 +168,30 @@ impl MousePainter {
             previous_paint_cell: None,
         }
     }
-    /// Mark the cell under the cursor (`self.pos`) in the paint mask.
+    /// Add a segment from the previous cell in this stroke to the cell under the cursor (`self.pos`).
     pub fn add_to_buffer(&mut self, config: &AppConfig) {
         let Some(cell) = self.pos_to_cell(config) else {
-            // mark None when out of bounds.
+            // Off the grid: end the stroke.
             self.previous_paint_cell = None;
             return;
         };
-        // if we're in the grid then
-        match self.previous_paint_cell {
-            Some(prev_cell) => self.mark_line(prev_cell, cell, config),
-            None => self.mark_cell(cell, config),
-        }
+        // First cell of a stroke is a zero-length segment.
+        let src = self.previous_paint_cell.unwrap_or(cell);
+        self.push_segment(src, cell);
         // Remember this cell, so the next event in this stroke draws a line from here.
         self.previous_paint_cell = Some(cell);
     }
+    /// Queue a segment for the next upload.
+    fn push_segment(&mut self, src: (usize, usize), dst: (usize, usize)) {
+        if self.segments.len() == MAX_SEGMENTS {
+            return;
+        }
+        let b = [dst.0 as i32, dst.1 as i32];
+        let a = [src.0 as i32, src.1 as i32];
+        let seg = Segment { a, b };
+        self.segments.push(seg);
+    }
+
     /// Convert the received logical pixel to cell coordinates in the grid.
     /// None if out of bounds.
     pub fn pos_to_cell(&self, config: &AppConfig) -> Option<(usize, usize)> {
@@ -178,67 +213,6 @@ impl MousePainter {
 
         y.map(|y| (x, y))
     }
-    /// Mark a single cell as `on` by its grid coordinates.
-    pub fn mark_cell(&mut self, pos: (usize, usize), config: &AppConfig) {
-        let array_pos = pos.0 + config.cols * pos.1;
-        self.paint_buffer_cpu[array_pos] = 1;
-    }
-    /// Mark every cell on a straight line from `from` to `to` inclusive.
-    ///
-    /// [`Bresenham's line algorithm for all cases`](https://en.wikipedia.org/wiki/Bresenham%27s_line_algorithm#All_cases)
-    /// which walks one cell at a time either in x, y or both from start to end
-    pub fn mark_line(&mut self, from: (usize, usize), to: (usize, usize), config: &AppConfig) {
-        // starting x, y which will update as we move the plotter
-        // using i64 as step directions can be -ve
-        let (mut x, mut y) = (from.0 as i64, from.1 as i64);
-        // destination
-        let (x1, y1) = (to.0 as i64, to.1 as i64);
-
-        // How far the line goes in x and y. directions handled by sx, sy.
-        // Since the sx,sy are handling direction we can think of dx as how far
-        // right the line goes and dy as how far up.
-        // dy is stored as negative so that we can have one `err` value
-        // updating instead of 2 separate ones
-        let dx = (x1 - x).abs();
-        let dy = -(y1 - y).abs(); // negative
-        // initial err value. +ve means shallow line. -ve means steep line
-        // at least at the start
-        let mut err = dx + dy;
-
-        // steps
-        let sx = if x < x1 { 1 } else { -1 };
-        let sy = if y < y1 { 1 } else { -1 };
-
-        // err      = how far the diagonal cell D (x+1, y+1) is off the true line (scaled to whole numbers)
-        // 2·err ≤ dx   → D within ½ cell vertically   → move in y
-        // 2·err ≥ dy   → D within ½ cell horizontally → move in x
-        // both         → diagonal step
-        // moved in x   → err += dy  (D got closer horizontally)
-        // moved in y   → err += dx  (D got higher)
-        // sx, sy       → turn "right/up" into the real direction
-        loop {
-            self.mark_cell((x as usize, y as usize), config);
-            if x == x1 && y == y1 {
-                break;
-            }
-            let e2 = err * 2;
-            if e2 >= dy {
-                err += dy; // dy is -ve so this reduces err
-                x += sx;
-            }
-            if e2 <= dx {
-                err += dx; // increases err
-                y += sy;
-            }
-        }
-    }
-    /// Zero the paint mask after it has been uploaded.
-    /// #TODO: this is currently quite a heavy operation to be doing for each paint pass.
-    /// Need to find a better way to encode and send the paint buffer points to GPU. maybe as indices perhaps?
-    /// rather than the whole mask? that way when there's no painting then I can just not do this clear step.
-    pub fn clear_buffer(&mut self) {
-        self.paint_buffer_cpu.iter_mut().for_each(|x| *x = 0);
-    }
     /// Logical pixels per cell: window size divided by the number of columns/rows.
     pub fn calc_array_div_factor(window: &Arc<Window>, config: &AppConfig) -> (f32, f32) {
         let window_size = get_window_logical_size(window);
@@ -251,13 +225,28 @@ impl MousePainter {
     pub fn configure(&mut self, window: &Arc<Window>, config: &AppConfig) {
         self.array_div_factor = MousePainter::calc_array_div_factor(window, config);
     }
-    /// Upload the CPU paint mask to the GPU buffer.
-    /// #TODO: also a very heavy operation, definitely should be some way to improve this.
-    pub fn write_to_buffer(&mut self, queue: &wgpu::Queue) {
+    /// Upload this tick's segments to the GPU and clear them.
+    ///
+    /// Returns the threads needed as `(points per segment, segments)`, or `None` if nothing was painted.
+    pub fn write_to_buffer(&mut self, queue: &wgpu::Queue) -> Option<(u32, u32)> {
+        if self.segments.is_empty() {
+            return None;
+        }
+        let count = self.segments.len() as u32;
+        let max_steps = self.segments.iter().map(Segment::steps).max().unwrap_or(0);
+        // Header: count, then 4 bytes padding so the segments start 8-byte aligned.
         queue.write_buffer(
             &self.paint_buffer_gpu,
             0,
-            bytemuck::cast_slice(&self.paint_buffer_cpu),
+            bytemuck::cast_slice(&[count, 0u32]),
         );
+        queue.write_buffer(
+            &self.paint_buffer_gpu,
+            HEADER_BYTES,
+            bytemuck::cast_slice(&self.segments),
+        );
+        self.segments.clear();
+        // steps + 1 points per segment: both ends are inclusive.
+        Some((max_steps + 1, count))
     }
 }

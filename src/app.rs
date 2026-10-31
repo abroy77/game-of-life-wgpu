@@ -422,7 +422,7 @@ impl ApplicationHandler<AppEvent> for App {
             } => self.handle_key(event_loop, code, state.is_pressed()),
             // --- Mouse painting ---
             // Track whether the cursor is over the window and the left button is held.
-            // While both are true, each cursor move marks the cell under it in the paint mask.
+            // While both are true, each cursor move queues a segment from the previous cell to this one.
             WindowEvent::CursorEntered { device_id: _ } => {
                 mouse.in_grid = true;
             }
@@ -548,7 +548,6 @@ impl ApplicationHandler<AppEvent> for App {
                     mouse,
                     &game_data.compute_uniform_bind_group,
                     game_data.get_current_compute_bind_group(),
-                    &self.config,
                 );
                 gc.request_redraw();
             }

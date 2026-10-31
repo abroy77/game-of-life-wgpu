@@ -77,3 +77,4 @@ This project includes GitHub Actions for automatic deployment to GitHub Pages:
 ## References:
 
 - [Bresenham's Line Algorithm](https://www.youtube.com/watch?v=CceepU1vIKo)
+- [Noah Russel's blog](https://www.noahrousell.com/blog/a-whirlwind-tour-of/)
